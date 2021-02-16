@@ -21,6 +21,10 @@
 #include <xapobase.h>
 #include "myXapo.h"
 #include <stdexcept>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <array>
 
 
 
@@ -124,9 +128,9 @@ HRESULT ReadChunkData(HANDLE hFile, void* buffer, DWORD buffersize, DWORD buffer
 Función auxiliar que nos carga un fichero .wav en el programa y en la libreria xaudio2
 Devuelve una estrucutra de datos y el buffer de xaudio2
 */
-HRESULT openWav(const TCHAR* name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& buffer) {
+HRESULT openWav(const LPCSTR name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& buffer) {
     // Open the file
-    HANDLE hFile = CreateFile(
+    HANDLE hFile = CreateFileA(
         name,
         GENERIC_READ,
         FILE_SHARE_READ,
@@ -166,9 +170,76 @@ HRESULT openWav(const TCHAR* name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& bu
     buffer.LoopBegin = UINT32(0);
 }
 
-// TODO: Move all filter loading to here
-void loadFilter() {
+struct filter_data {
+    WAVEFORMATEXTENSIBLE* wfx;
+    XAUDIO2_BUFFER* buffer;
+    int elevation;
+    unsigned angle;
+    bool left;
+};
 
+
+// TODO: Load all elevations
+// TODO: FFT all buffers here? Maybe in myXapo
+int loadFilters(filter_data* filters) {
+    
+    const array<int,5/*14*/> elevations = {/*-40, -30,*/ -20, -10, 0, 10, 20, /*30, 40, 50, 60, 70, 80, 90*/};
+    
+    std::string prevPath = "filters";
+    std::string name = "elev";
+    std::string separator = "\\";
+    std::string left = "L";
+    std::string right = "R";
+
+    unsigned index = 0;
+
+    for (unsigned i = 0; i < elevations.size(); i++) {
+        std::string elevation = to_string(elevations[i]);
+        std::string folder = name + elevation;
+
+        for (unsigned j = 0; j < 360; j += 5) {
+
+            std::stringstream file;
+            file << elevation << "e";
+            file << std::setfill('0') << std::setw(3) << j << "a.wav";
+
+
+            std::array<string, 2> paths;
+
+            std::string path = prevPath + separator + folder + separator;
+
+            paths[0] = path + right + file.str(); //Right ear
+            paths[1] = path + left  + file.str(); //Left ear
+
+            //std::cout << pathFileR << std::endl << pathFileL << std::endl;
+
+            // Start importing .wav
+            for (unsigned k = 0; k < paths.size(); k++) {
+                WAVEFORMATEXTENSIBLE wfx = { 0 };
+                XAUDIO2_BUFFER buffer = { 0 };
+
+                HRESULT hr = openWav(paths[k].c_str(), wfx, buffer);
+                if (FAILED(hr)) {
+                    std::cout << "Couldn't open " << paths[k] << "." << std::endl;
+                    //assert(0);
+                    return hr;
+                }
+
+                filters[index] = filter_data {
+                    &wfx,
+                    &buffer,
+                    elevations[i],
+                    j,
+                    bool(k)
+                };
+                index++;
+
+            }
+           
+        }
+
+    }
+    return 0;
 }
 
 /*
@@ -176,7 +247,7 @@ Función principal que carga la librería xAudio2,
 carga un fichero .wav e intenta reproducirlo aplicando
 el filtro que está especificado en myXapo
 */
-int main() {
+int main() { 
     HRESULT hr;
 
     // Required for xAPO processing
@@ -215,14 +286,23 @@ int main() {
     // Start importing .wav
     WAVEFORMATEXTENSIBLE wfx = { 0 };
     XAUDIO2_BUFFER buffer = { 0 };
+    // TODO:  Change 5000 for a more appropiate value
+    filter_data* wavData = (filter_data*)malloc(5000 * sizeof(filter_data));
+
+    hr = loadFilters(wavData);
+    if (FAILED(hr)) {
+        std::cout << "loadFilters() failed" << std::endl;
+        assert(0);
+        return false;
+    }
 
 #ifdef _XBOX
     char* strFileName = "game:\\media\\MusicMono.wav";
 #else
-    const TCHAR* strFileName = TEXT("C:\\Users\\faaa9\\Desktop\\tfg\\python\\7000.wav");
+    const std::string strFileName = "test_audio\\440hz.wav";
 #endif
 
-    openWav(strFileName, wfx, buffer); // Output in wfx and buffer
+    openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
 
     // Create source voice
     IXAudio2SourceVoice* pSourceVoice;
