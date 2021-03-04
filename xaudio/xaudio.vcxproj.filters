@@ -26,6 +26,9 @@
     <ClInclude Include="myXapo.h">
       <Filter>Archivos de origen</Filter>
     </ClInclude>
+    <ClInclude Include="filter_data.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

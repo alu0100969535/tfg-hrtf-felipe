@@ -6,6 +6,8 @@
 #include <xapobase.h>
 #include <assert.h>
 
+#include "filter_data.h"
+
 #include <complex>
 #include <iostream>
 #include <valarray>
@@ -16,6 +18,7 @@
 
 
 #include <algorithm> // std::max
+#include <math.h>       /* ceil */
 
 #ifdef _XBOX //Big-Endian
 #define fourccRIFF 'RIFF'
@@ -41,6 +44,8 @@ const double PI = 3.141592653589793238460;
 typedef std::complex<double> Complex;
 typedef std::valarray<Complex> CArray;
 
+
+
 // Debug function, writes to file so we can plot some samples
 // TODO: Remove this when done
 inline void outputToFile(CArray& arr, const int tries, const bool real = false) {
@@ -52,7 +57,9 @@ inline void outputToFile(CArray& arr, const int tries, const bool real = false) 
         assert(0);
     }
 
-    for (int i = 0; i < arr.size()/2; i += 1) {
+    int limit = real ? arr.size() : arr.size() / 2;
+
+    for (int i = 0; i < limit; i += 1) {
         double magnitude = sqrt(arr[i].real() * arr[i].real() + arr[i].imag() * arr[i].imag());
 
         // Only real part needed when plotting time-domain 
@@ -105,140 +112,8 @@ inline void ifft(CArray& x)
     x /= x.size();
 }
 
-// Performs overlap add method on DFTs, in-place
-// TODO: Filter is implemented this way, this function will do all the work
-// TODO: Not finished
-inline void overlap_add(CArray& input, CArray& filter, CArray& i_kemar, CArray& add, size_t i_size, size_t f_size) {
-
-    // Construct blocks of N samples
-    // N = L + M - 1
-    // L -> input_size
-    // M -> filter_size  -> pad with 0s to match N
-
-    size_t n = i_size + f_size - 1;
-
-    //std::cout << "overlap-add, n: " << n << ", input: " << i_size << ", filter: " << f_size << std::endl;
-
-    //outputToFile(input, 1);
-
-    // Prepare filter, pad with 0s
-    CArray filter_block = CArray();
-    filter_block.resize(n);
-    for (int j = 0; j < f_size; j++) {
-        filter_block[j] = filter[j];
-    }
-
-    for (int j = f_size; j < n; j++) {
-        filter_block[j] = Complex(0, 0);
-    }
-
-    // Do this until no more input
-    for (int i = 0; i < input.size(); i += n) {
-        // Prepare block, pad with 0s
-        CArray block = CArray();
-        block.resize(n);
-
-        int j_start = i;
-        int j_end = i + i_size;
-        if (j_end > input.size() - 1) {
-            j_end = input.size() - 1;
-        }
-
-        for (int j = j_start; j < j_end; j++) {
-            block[j] = input[j];
-        }
-        for (int j = j_end; j < n; j++) {
-            block[j] = Complex(0, 0);
-        }
 
 
-        // Indexes for multiplication, overlap
-        int start = i - (f_size - 1);
-        if (start < 0) {
-            start = 0;
-        }
-        int end = start + block.size();
-        if (end > input.size() - 1) {
-            end = input.size() - 1;
-        }
-
-        // Multiply 1 vs 1 and add on overlapping sections
-        for (int j = start; j < end; j++) {
-            int current = j - start;
-            // std::cout<< "i: "<< i << ", j: " << j << ", current: " << current << std::endl;
-            if (j < i) {
-                input[j] = block[current] * filter_block[current] * i_kemar[current];
-            }
-            else {
-                input[j] = block[current] * filter_block[current] * i_kemar[current];
-            }
-        }
-    }
-
-    // Save M - 1 samples
-    CArray lastOverlapBlock = CArray();
-    lastOverlapBlock.resize(f_size - 1);
-
-    for (int i = 0; i < lastOverlapBlock.size(); i++) {
-
-    }
-
-    //outputToFile(input, 2);
-    //outputToFile(block, 3);
-    //outputToFile(filter_block, 4);
-
-}
-
-// Prepare data for FFT, takes data from p and outputs in arr.
-// Fills with 0's to match nfft size
-inline void transformData(CArray& arr, const float* p, const uint32_t size, const uint32_t nfft = 512) {
-
-    if (size > nfft) {
-        assert(0);
-    }
-
-    arr.resize(nfft);
-
-    for (int i = 0; i < size; i += 1) {
-        arr[i] = Complex(p[i], 0);
-    }
-
-    for (int i = size; i < nfft; i += 1) {
-        arr[i] = Complex(0, 0);
-    }
-}
-
-// Prepare data for FFT, takes data from p and outputs in arr, in double values.
-// Fills with 0's to match nfft size
-inline void transformData(CArray& arr, const int16_t* p, const uint32_t size, const uint32_t nfft = 512) {
-
-    if (size > nfft) {
-        assert(0);
-    }
-    arr.resize(nfft);
-
-    for (int i = 0; i < size; i++) {
-        constexpr int16_t oldMin = (std::numeric_limits<int16_t>::min)();
-        constexpr int16_t oldMax = (std::numeric_limits<int16_t>::max)();
-
-        const double newMin = -1.0;
-        const double newMax = 1.0;
-
-        const int32_t oldRange = (int32_t)oldMax - (int32_t)oldMin;
-        const double newRange = newMax - newMin;
-
-        arr[i] = Complex((double)((((double)p[i] - (double)oldMin) * newRange) / oldRange) + newMin, 0);
-    }
-
-
-    /*for (int i = 0; i < size; i += 1) {
-        arr[i] = Complex(p[i], 0);
-    }*/
-
-    for (int i = size; i < nfft; i += 1) {
-        arr[i] = Complex(0, 0);
-    }
-}
 
 // Perform hannWindow in-place only to real part
 inline void applyHannWindow(CArray& arr) {
@@ -251,133 +126,33 @@ inline void applyHannWindow(CArray& arr) {
     }
 }
 
-inline HRESULT FindChunk2(HANDLE hFile, DWORD fourcc, DWORD& dwChunkSize, DWORD& dwChunkDataPosition)
-{
-    HRESULT hr = S_OK;
-    if (INVALID_SET_FILE_POINTER == SetFilePointer(hFile, 0, NULL, FILE_BEGIN))
-        return HRESULT_FROM_WIN32(GetLastError());
-
-    DWORD dwChunkType;
-    DWORD dwChunkDataSize;
-    DWORD dwRIFFDataSize = 0;
-    DWORD dwFileType;
-    DWORD bytesRead = 0;
-    DWORD dwOffset = 0;
-
-    while (hr == S_OK)
-    {
-        DWORD dwRead;
-        if (0 == ReadFile(hFile, &dwChunkType, sizeof(DWORD), &dwRead, NULL))
-            hr = HRESULT_FROM_WIN32(GetLastError());
-
-        if (0 == ReadFile(hFile, &dwChunkDataSize, sizeof(DWORD), &dwRead, NULL))
-            hr = HRESULT_FROM_WIN32(GetLastError());
-
-        switch (dwChunkType)
-        {
-        case fourccRIFF:
-            dwRIFFDataSize = dwChunkDataSize;
-            dwChunkDataSize = 4;
-            if (0 == ReadFile(hFile, &dwFileType, sizeof(DWORD), &dwRead, NULL))
-                hr = HRESULT_FROM_WIN32(GetLastError());
-            break;
-
-        default:
-            if (INVALID_SET_FILE_POINTER == SetFilePointer(hFile, dwChunkDataSize, NULL, FILE_CURRENT))
-                return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        dwOffset += sizeof(DWORD) * 2;
-
-        if (dwChunkType == fourcc)
-        {
-            dwChunkSize = dwChunkDataSize;
-            dwChunkDataPosition = dwOffset;
-            return S_OK;
-        }
-
-        dwOffset += dwChunkDataSize;
-
-        if (bytesRead >= dwRIFFDataSize) return S_FALSE;
-
-    }
-
-    return S_OK;
-
-}
-
-inline HRESULT ReadChunkData2(HANDLE hFile, void* buffer, DWORD buffersize, DWORD bufferoffset)
-{
-    HRESULT hr = S_OK;
-    if (INVALID_SET_FILE_POINTER == SetFilePointer(hFile, bufferoffset, NULL, FILE_BEGIN))
-        return HRESULT_FROM_WIN32(GetLastError());
-    DWORD dwRead;
-    if (0 == ReadFile(hFile, buffer, buffersize, &dwRead, NULL))
-        hr = HRESULT_FROM_WIN32(GetLastError());
-    return hr;
-}
-
-inline HRESULT openWav2(const TCHAR* name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& buffer) {
-    // Open the file
-    HANDLE hFile = CreateFile(
-        name,
-        GENERIC_READ,
-        FILE_SHARE_READ,
-        NULL,
-        OPEN_EXISTING,
-        0,
-        NULL);
-
-    if (INVALID_HANDLE_VALUE == hFile)
-        return HRESULT_FROM_WIN32(GetLastError());
-
-    if (INVALID_SET_FILE_POINTER == SetFilePointer(hFile, 0, NULL, FILE_BEGIN))
-        return HRESULT_FROM_WIN32(GetLastError());
-
-    // Read the file
-    DWORD dwChunkSize;
-    DWORD dwChunkPosition;
-    //check the file type, should be fourccWAVE or 'XWMA'
-    FindChunk2(hFile, fourccRIFF, dwChunkSize, dwChunkPosition);
-    DWORD filetype;
-    ReadChunkData2(hFile, &filetype, sizeof(DWORD), dwChunkPosition);
-    if (filetype != fourccWAVE)
-        return S_FALSE;
-
-    FindChunk2(hFile, fourccFMT, dwChunkSize, dwChunkPosition);
-    ReadChunkData2(hFile, &wfx, dwChunkSize, dwChunkPosition);
-
-    //fill out the audio data buffer with the contents of the fourccDATA chunk
-    FindChunk2(hFile, fourccDATA, dwChunkSize, dwChunkPosition);
-    BYTE* pDataBuffer = new BYTE[dwChunkSize];
-    ReadChunkData2(hFile, pDataBuffer, dwChunkSize, dwChunkPosition);
-
-    buffer.AudioBytes = dwChunkSize;  //size of the audio buffer in bytes
-    buffer.pAudioData = pDataBuffer;  //buffer containing audio data
-    buffer.Flags = XAUDIO2_END_OF_STREAM; // tell the source voice not to expect any data after this buffer
-    buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
-    buffer.LoopBegin = UINT32(0);
-}
-
 class myXapo : public CXAPOBase {
 
 private:
     WORD m_uChannels;
     WORD m_uBytesPerSample;
 
-    unsigned fft_size;
-    unsigned* indexes;
+    size_t fft_n;
+    size_t step_size;
+    size_t fir_size;
+
+    data_buffer new_samples;
+    data_buffer saved_samples;
+    data_buffer process_samples;
+    data_buffer to_sum_samples;
+    data_buffer ready_samples;
+
+    UINT32 max_frame_count;
 
     // DEBUG
     bool done = false;
     int tries = 0;
-    
-    CArray hrtf = CArray();
-    CArray i_kemar = CArray();
+
+    filter_data* hrtf_database;
 
 public:
 
-    myXapo(XAPO_REGISTRATION_PROPERTIES* pRegistrationProperties);
+    myXapo(XAPO_REGISTRATION_PROPERTIES* pRegistrationProperties, filter_data* filters, size_t filters_size);
     ~myXapo();
 
     STDMETHOD(LockForProcess) (UINT32 InputLockedParameterCount,
@@ -396,6 +171,7 @@ public:
 
         m_uChannels = pInputLockedParameters[0].pFormat->nChannels;
         m_uBytesPerSample = (pInputLockedParameters[0].pFormat->wBitsPerSample >> 3);
+        max_frame_count = pOutputLockedParameters->MaxFrameCount;
 
         return CXAPOBase::LockForProcess(
             InputLockedParameterCount,
@@ -435,34 +211,135 @@ public:
             assert(pvDst != NULL);
 
             float* pvSrcf = static_cast<float*>(pvSrc); // input, as float
+            float* pvDstf = static_cast<float*>(pvDst); // output, as float
+
 
             UINT32 len = pInputProcessParameters[0].ValidFrameCount * m_uChannels;
 
             // Prepare array to perform FFT
-            CArray arr;
-            transformData(arr, pvSrcf, len);
+            transformData(*new_samples.pdata, pvSrcf, len, len);
+            new_samples.size = len;
 
-            // Apply Hann Window
-            applyHannWindow(arr);
-            
-            // Convert to freq domain
-            fft(arr);
+            // Start overlap-add
+            size_t old_len = saved_samples.size;
+            size_t new_len = old_len + new_samples.size;
 
-            // Set DC bin to 0
-            arr[0] = Complex(0, 0);
+            // If we don't have enough samples, save them and don't return anything
+            if (new_len < step_size) {
 
-            // HRTF Processing here
+                for (unsigned i = old_len; i < new_len; i++) {
+                    (*saved_samples.pdata)[i] = (*new_samples.pdata)[i - old_len];
+                }
+                saved_samples.size = new_len;
 
-            for (int i = 0; i < arr.size(); i++) {
-                arr[i] *= hrtf[i];
-                //arr[i] *= i_kemar[i];
+                //std::cout << "got " << new_len << " data available" << std::endl;
+
+            }
+            // If we have enough, process them and put them in a queue to return
+            else {
+                for (unsigned i = 0; i < old_len; i++) {
+                    (*process_samples.pdata)[i] = (*saved_samples.pdata)[i];
+                }
+
+                for (unsigned i = old_len; i < step_size; i++) {
+                    (*process_samples.pdata)[i] = (*new_samples.pdata)[i - old_len];
+                }
+
+                for (unsigned i = step_size; i < fft_n; i++) {
+                    (*process_samples.pdata)[i] = Complex(0, 0); //Pad with 0's to match N
+                }
+
+                process_samples.size = fft_n;
+
+                // Apply Hann Window
+                //applyHannWindow(*process_samples.pdata);
+
+                // Convert to freq domain
+                fft(*process_samples.pdata);
+
+                // Set DC bin to 0
+                (*process_samples.pdata)[0] = Complex(0, 0);
+
+                // Apply convolution
+                for (unsigned i = 0; i < process_samples.size; i++) {
+                    (*process_samples.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.left)[i];
+                }
+
+                // Convert back to time domain
+                ifft(*process_samples.pdata);
+
+                //std::cout << "samples\tprocessed " << step_size << " real frames," << process_samples.size << " total" << std::endl;
+
+                // Save samples we're not using this cycle
+                size_t extra_samples = new_len - step_size;
+                size_t index = new_samples.size - extra_samples;
+
+                for (unsigned i = index; i < new_samples.size; i++) {
+                    (*saved_samples.pdata)[i - index] = (*new_samples.pdata)[i];
+                }
+
+                saved_samples.size = extra_samples;
+                //std::cout << "samples\tsaved " << saved_samples.size << " real frames" << std::endl;
+
+               
+                // Sum last computed frames to first freshly computed ones
+                if (to_sum_samples.size > 0) {
+                    for (unsigned i = 0; i < to_sum_samples.size; i++) {
+                        (*process_samples.pdata)[i] += (*to_sum_samples.pdata)[i].real();
+                    }
+                    to_sum_samples.size = 0;
+                }
+
+
+                //processed samples, go to a queue
+                for (unsigned i = 0; i < process_samples.size - fir_size + 1; i++) {
+                    (*ready_samples.pdata)[i + ready_samples.size] = (*process_samples.pdata)[i].real();
+                }
+
+                ready_samples.size = ready_samples.size + process_samples.size - fir_size + 1;
+
+
+                // save M - 1 to sum
+                for (unsigned i = process_samples.size - fir_size + 1; i < process_samples.size; i++) {
+                    (*to_sum_samples.pdata)[i - (process_samples.size - fir_size + 1)] = (*process_samples.pdata)[i].real();
+                }
+
+                to_sum_samples.size = process_samples.size - (process_samples.size - fir_size + 1);
+
+                //std::cout << "samples\tready: " << ready_samples.size << " frames" << std::endl;
+                //std::cout << "samples\tto sum: " << to_sum_samples.size << " frames" << std::endl;
+
+                
             }
 
-            // TODO: This doesn't go here anymore, inside this method should go HRTF processing
-            //overlap_add(arr, hrtf, i_kemar, 257, 256);
+            pOutputProcessParameters[0].ValidFrameCount = 0;
+
+            // If we have processed samples, return them to xaudio2
+            if (ready_samples.size > 0) {
+
+
+                UINT32 limit = min(ready_samples.size, this->max_frame_count);
+                //std::cout << "buffer: " << limit << " frames" << std::endl;
+
+
+                //Put into output buffer
+                for (unsigned i = 0; i < limit; i++) {
+                    pvDstf[i] = (float)(*ready_samples.pdata)[i].real();
+                }
+
+                //Rotate and refresh size counter
+                for (unsigned i = limit; i < ready_samples.size; i++) {
+                    (*ready_samples.pdata)[i - limit] = (*ready_samples.pdata)[i];
+                }
+
+                ready_samples.size = ready_samples.size - limit;
+
+                pOutputProcessParameters[0].ValidFrameCount = limit;
+            }
             
-            // Convert to time domain
-            ifft(arr);
+
+
+            new_samples.size = 0;
 
             // DEBUG
             /*
@@ -478,7 +355,7 @@ public:
             //DEBUG-END
 
             // Copy result to output buffer
-            memcpy(pvDst, pvSrc, pInputProcessParameters[0].ValidFrameCount * m_uChannels * m_uBytesPerSample);
+            //memcpy(pvDst, pvSrc, pInputProcessParameters[0].ValidFrameCount * m_uChannels * m_uBytesPerSample);
 
             break;
         }
@@ -493,7 +370,7 @@ public:
         }
 
         // set destination valid frame count, and buffer flags
-        pOutputProcessParameters[0].ValidFrameCount = pInputProcessParameters[0].ValidFrameCount; // set destination frame count same as source
+        //pOutputProcessParameters[0].ValidFrameCount = pInputProcessParameters[0].ValidFrameCount; // set destination frame count same as source
         pOutputProcessParameters[0].BufferFlags = pInputProcessParameters[0].BufferFlags;     // set destination buffer flags same as source
 
     }

@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <array>
 
+#include "filter_data.h"
 
 
 #ifdef _XBOX //Big-Endian
@@ -170,26 +171,17 @@ HRESULT openWav(const LPCSTR name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& bu
     buffer.LoopBegin = UINT32(0);
 }
 
-struct filter_data {
-    WAVEFORMATEXTENSIBLE* wfx;
-    XAUDIO2_BUFFER* buffer;
-    int elevation;
-    unsigned angle;
-    bool left;
-};
-
 
 // TODO: Load all elevations
 // TODO: FFT all buffers here? Maybe in myXapo
-int loadFilters(filter_data* filters) {
+int loadFilters(filter_data* filters, size_t* size) {
     
     const array<int,5/*14*/> elevations = {/*-40, -30,*/ -20, -10, 0, 10, 20, /*30, 40, 50, 60, 70, 80, 90*/};
     
     std::string prevPath = "filters";
     std::string name = "elev";
     std::string separator = "\\";
-    std::string left = "L";
-    std::string right = "R";
+    std::string start = "H";
 
     unsigned index = 0;
 
@@ -197,48 +189,46 @@ int loadFilters(filter_data* filters) {
         std::string elevation = to_string(elevations[i]);
         std::string folder = name + elevation;
 
-        for (unsigned j = 0; j < 360; j += 5) {
+        for (unsigned j = 0; j < 180; j += 5) {
 
             std::stringstream file;
             file << elevation << "e";
             file << std::setfill('0') << std::setw(3) << j << "a.wav";
 
-
-            std::array<string, 2> paths;
-
-            std::string path = prevPath + separator + folder + separator;
-
-            paths[0] = path + right + file.str(); //Right ear
-            paths[1] = path + left  + file.str(); //Left ear
+            std::string path = prevPath + separator + folder + separator + start + file.str();
 
             //std::cout << pathFileR << std::endl << pathFileL << std::endl;
 
             // Start importing .wav
-            for (unsigned k = 0; k < paths.size(); k++) {
-                WAVEFORMATEXTENSIBLE wfx = { 0 };
-                XAUDIO2_BUFFER buffer = { 0 };
+            WAVEFORMATEXTENSIBLE *wfx = new WAVEFORMATEXTENSIBLE({ 0 });
+            XAUDIO2_BUFFER *buffer = new XAUDIO2_BUFFER({ 0 });
 
-                HRESULT hr = openWav(paths[k].c_str(), wfx, buffer);
-                if (FAILED(hr)) {
-                    std::cout << "Couldn't open " << paths[k] << "." << std::endl;
-                    //assert(0);
-                    return hr;
-                }
-
-                filters[index] = filter_data {
-                    &wfx,
-                    &buffer,
-                    elevations[i],
-                    j,
-                    bool(k)
-                };
-                index++;
-
+            HRESULT hr = openWav(path.c_str(), *wfx, *buffer);
+            if (FAILED(hr)) {
+                std::cout << "Couldn't open " << path << "." << std::endl;
+                //assert(0);
+                return hr;
             }
+
+            filters[index] = filter_data {
+                raw_data {
+                    wfx,
+                    buffer,
+                },
+                fir {
+                    NULL,
+                    NULL,
+                },
+                elevations[i],
+                j,
+            };
+            index++;
+
            
         }
 
     }
+    *size = index - 1;
     return 0;
 }
 
@@ -286,10 +276,11 @@ int main() {
     // Start importing .wav
     WAVEFORMATEXTENSIBLE wfx = { 0 };
     XAUDIO2_BUFFER buffer = { 0 };
-    // TODO:  Change 5000 for a more appropiate value
-    filter_data* wavData = (filter_data*)malloc(5000 * sizeof(filter_data));
 
-    hr = loadFilters(wavData);
+    filter_data* filters = (filter_data*)malloc(710 * sizeof(filter_data));
+    size_t* filters_size = new size_t();
+
+    hr = loadFilters(filters, filters_size);
     if (FAILED(hr)) {
         std::cout << "loadFilters() failed" << std::endl;
         assert(0);
@@ -299,7 +290,8 @@ int main() {
 #ifdef _XBOX
     char* strFileName = "game:\\media\\MusicMono.wav";
 #else
-    const std::string strFileName = "test_audio\\440hz.wav";
+    //const std::string strFileName = "test_audio\\440hz.wav";
+    const std::string strFileName = "test_audio\\motor.wav";
 #endif
 
     openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
@@ -323,19 +315,21 @@ int main() {
 
     // We create the necessary structures to load custom XAPOs
     XAPO_REGISTRATION_PROPERTIES prop = {};
-    prop.Flags = XAPOBASE_DEFAULT_FLAG; // | XAPO_FLAG_INPLACE_REQUIRED;
+    prop.Flags = XAPO_FLAG_FRAMERATE_MUST_MATCH 
+        | XAPO_FLAG_BITSPERSAMPLE_MUST_MATCH 
+        | XAPO_FLAG_BUFFERCOUNT_MUST_MATCH;
     prop.MinInputBufferCount = 1;
     prop.MaxInputBufferCount = 1;
     prop.MaxOutputBufferCount = 1;
     prop.MinOutputBufferCount = 1;
 
     // Load custom Xapo instance
-    IUnknown* pXAPO = new myXapo(&prop);
+    IUnknown* pXAPO = new myXapo(&prop, filters, *filters_size);
 
     // Structure for custom xAPO
     XAUDIO2_EFFECT_DESCRIPTOR descriptor;
     descriptor.InitialState = true; // Efect applied from start
-    descriptor.OutputChannels = 1; // TODO: Change to 2 for HRTF
+    descriptor.OutputChannels = 2; // TODO: Change to 2 for HRTF
     descriptor.pEffect = pXAPO; // Custom xAPO to apply
 
     // Structure indicating how many effects we have (1)
