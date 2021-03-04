@@ -25,7 +25,7 @@ else:
 with open(file, 'r') as csvfile:
     plots= csv.reader(csvfile, delimiter=',')
     for row in plots:
-        if count < limit:
+        if count < int(limit):
             x.append(float(row[1]))
             y.append(float(row[0]))
         count = count + 1
