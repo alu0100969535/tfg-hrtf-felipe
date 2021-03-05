@@ -65,17 +65,30 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, filter_data* filters, size_t 
     process_samples.pdata = new CArray(fft_n);
     process_samples.size = 0;
 
-    to_sum_samples.pdata = new CArray(fir_size);
-    to_sum_samples.size = 0;
+    processed_samples.left.pdata = new CArray(fft_n);
+    processed_samples.left.size = 0;
+    processed_samples.right.pdata = new CArray(fft_n);
+    processed_samples.right.size = 0;
 
-    ready_samples.pdata = new CArray(fft_n * 2);
-    ready_samples.size = 0;
+    to_sum_samples.left.pdata = new CArray(fir_size);
+    to_sum_samples.left.size = 0;
+    to_sum_samples.right.pdata = new CArray(fir_size);
+    to_sum_samples.right.size = 0;
+
+    ready_samples.left.pdata = new CArray(fft_n * 200);
+    ready_samples.left.size = 0;
+    ready_samples.right.pdata = new CArray(fft_n * 200);
+    ready_samples.right.size = 0;
 
 }
 
 myXapo::~myXapo() {
     delete saved_samples.pdata;
     delete process_samples.pdata;
-    delete to_sum_samples.pdata;
-    delete ready_samples.pdata;
+    delete processed_samples.left.pdata;
+    delete processed_samples.right.pdata;
+    delete to_sum_samples.left.pdata;
+    delete to_sum_samples.right.pdata;
+    delete ready_samples.left.pdata;
+    delete ready_samples.right.pdata;
 }

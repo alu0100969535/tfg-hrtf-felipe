@@ -259,24 +259,14 @@ int main() {
 
     // Create a mastering voice
     IXAudio2MasteringVoice* pMasterVoice = NULL;
-    hr = pXAudio2->CreateMasteringVoice(&pMasterVoice);
+    hr = pXAudio2->CreateMasteringVoice(&pMasterVoice, 2);
     if (FAILED(hr)) {
         std::cout << "CreateMasteringVoice() failed" << std::endl;
         assert(0);
         return false;
     }
 
-#ifdef _DEBUG
-    XAUDIO2_DEBUG_CONFIGURATION debugConfig = {};
-    debugConfig.TraceMask = XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
-    debugConfig.BreakMask = XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
-    pXAudio2->SetDebugConfiguration(&debugConfig);
-#endif // _DEBUG
-
-    // Start importing .wav
-    WAVEFORMATEXTENSIBLE wfx = { 0 };
-    XAUDIO2_BUFFER buffer = { 0 };
-
+    // Load filters for xAPO class
     filter_data* filters = (filter_data*)malloc(710 * sizeof(filter_data));
     size_t* filters_size = new size_t();
 
@@ -287,36 +277,10 @@ int main() {
         return false;
     }
 
-#ifdef _XBOX
-    char* strFileName = "game:\\media\\MusicMono.wav";
-#else
-    //const std::string strFileName = "test_audio\\440hz.wav";
-    const std::string strFileName = "test_audio\\motor.wav";
-#endif
-
-    openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
-
-    // Create source voice
-    IXAudio2SourceVoice* pSourceVoice;
-    hr = pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&wfx);
-    if (FAILED(hr)) {
-        std::cout << "CreateSourceVoice() failed" << std::endl;
-        assert(0);
-        return false;
-    }
-
-    // Submit buffer to voice
-    hr = pSourceVoice->SubmitSourceBuffer(&buffer);
-    if (FAILED(hr)) {
-        std::cout << "SubmitSourceBuffer() failed" << std::endl;
-        assert(0);
-        return false;
-    }
-
     // We create the necessary structures to load custom XAPOs
     XAPO_REGISTRATION_PROPERTIES prop = {};
-    prop.Flags = XAPO_FLAG_FRAMERATE_MUST_MATCH 
-        | XAPO_FLAG_BITSPERSAMPLE_MUST_MATCH 
+    prop.Flags = XAPO_FLAG_FRAMERATE_MUST_MATCH
+        | XAPO_FLAG_BITSPERSAMPLE_MUST_MATCH
         | XAPO_FLAG_BUFFERCOUNT_MUST_MATCH;
     prop.MinInputBufferCount = 1;
     prop.MaxInputBufferCount = 1;
@@ -337,10 +301,58 @@ int main() {
     chain.EffectCount = 1;
     chain.pEffectDescriptors = &descriptor;
 
-    // Apply effect chain
-    hr = pSourceVoice->SetEffectChain(&chain);
+    // Create a Submix Voice
+    IXAudio2SubmixVoice* pSFXSubmixVoice = NULL;
+    hr = pXAudio2->CreateSubmixVoice(&pSFXSubmixVoice, 1, 44100, 0, 0, 0, &chain);
     if (FAILED(hr)) {
-        std::cout << "SetEffectChain() failed" << std::endl;
+        std::cout << "CreateMasteringVoice() failed" << std::endl;
+        assert(0);
+        return false;
+    }
+
+#ifdef _DEBUG
+    XAUDIO2_DEBUG_CONFIGURATION debugConfig = {};
+    debugConfig.TraceMask = XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
+    debugConfig.BreakMask = XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
+    pXAudio2->SetDebugConfiguration(&debugConfig);
+#endif // _DEBUG
+
+    // Start importing .wav
+    WAVEFORMATEXTENSIBLE wfx = { 0 };
+    XAUDIO2_BUFFER buffer = { 0 };
+
+
+#ifdef _XBOX
+    char* strFileName = "game:\\media\\MusicMono.wav";
+#else
+    //const std::string strFileName = "test_audio\\440hz.wav";
+    const std::string strFileName = "test_audio\\motor.wav";
+#endif
+
+    openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
+
+    // Populate structures for xaudio2, so it knows where to send data
+    XAUDIO2_SEND_DESCRIPTOR voice;
+    voice.Flags = 0;
+    voice.pOutputVoice = pSFXSubmixVoice;
+
+    XAUDIO2_VOICE_SENDS sendlist;
+    sendlist.SendCount = 1;
+    sendlist.pSends = &voice;
+
+    // Create source voice
+    IXAudio2SourceVoice* pSourceVoice;
+    hr = pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&wfx, 0, 2.0, NULL, &sendlist, NULL);
+    if (FAILED(hr)) {
+        std::cout << "CreateSourceVoice() failed" << std::endl;
+        assert(0);
+        return false;
+    }
+
+    // Submit buffer to voice
+    hr = pSourceVoice->SubmitSourceBuffer(&buffer);
+    if (FAILED(hr)) {
+        std::cout << "SubmitSourceBuffer() failed" << std::endl;
         assert(0);
         return false;
     }

@@ -38,14 +38,6 @@
 #define fourccDPDS 'sdpd'
 #endif
 
-const double PI = 3.141592653589793238460;
-
-
-typedef std::complex<double> Complex;
-typedef std::valarray<Complex> CArray;
-
-
-
 // Debug function, writes to file so we can plot some samples
 // TODO: Remove this when done
 inline void outputToFile(CArray& arr, const int tries, const bool real = false) {
@@ -73,7 +65,7 @@ inline void outputToFile(CArray& arr, const int tries, const bool real = false) 
     myfile.close();
 }
 
-// Cooley–Tukey FFT (in-place, divide-and-conquer)
+// Cooley-Tukey FFT (in-place, divide-and-conquer)
 // Higher memory requirements and redundancy although more intuitive
 inline void fft(CArray& x) {
     const size_t N = x.size();
@@ -96,33 +88,57 @@ inline void fft(CArray& x) {
     }
 };
 
+// Cooley–Tukey FFT (in-place, divide-and-conquer)
+// Higher memory requirements and redundancy although more intuitive
+inline void fft(data_buffer& x) {
+    const size_t N = x.size;
+    if (N <= 1) return;
+
+    // divide
+    CArray even = (*x.pdata)[std::slice(0, N / 2, 2)];
+    CArray  odd = (*x.pdata)[std::slice(1, N / 2, 2)];
+
+    data_buffer evendb = { &even, even.size() };
+    data_buffer odddb = { &odd, odd.size() };
+
+    // conquer
+    fft(evendb);
+    fft(odddb);
+
+    // combine
+    for (size_t k = 0; k < N / 2; ++k)
+    {
+        Complex t = std::polar(1.0, -2.0 * PI * (double)k / (double)N) * (*odddb.pdata)[k];
+        (*x.pdata)[k] = (*evendb.pdata)[k] + t;
+        (*x.pdata)[k + N / 2] = (*evendb.pdata)[k] - t;
+    }
+};
+
 // inverse fft (in-place)
-inline void ifft(CArray& x)
+inline void ifft(data_buffer& x)
 {
     // conjugate the complex numbers
-    x = x.apply(std::conj);
+    (*x.pdata) = (*x.pdata).apply(std::conj);
 
     // forward fft
     fft(x);
 
     // conjugate the complex numbers again
-    x = x.apply(std::conj);
+    (*x.pdata) = (*x.pdata).apply(std::conj);
 
     // scale the numbers
-    x /= x.size();
+    (*x.pdata) /= x.size;
 }
 
 
-
-
 // Perform hannWindow in-place only to real part
-inline void applyHannWindow(CArray& arr) {
+inline void applyHannWindow(data_buffer& arr) {
 
-    const size_t size = arr.size();
+    const size_t size = arr.size;
 
     for (int i = 0; i < size; i++) {
         double multiplier = 0.5 * (1 - cos(2 * PI * i / (size - 1)));
-        arr[i] = Complex(multiplier * arr[i].real(), 0);
+        (*arr.pdata)[i] = Complex(multiplier * (*arr.pdata)[i].real(), 0);
     }
 }
 
@@ -139,13 +155,18 @@ private:
     data_buffer new_samples;
     data_buffer saved_samples;
     data_buffer process_samples;
-    data_buffer to_sum_samples;
-    data_buffer ready_samples;
+    
+    stereo_data_buffer processed_samples;
+    stereo_data_buffer ready_samples;
+    stereo_data_buffer to_sum_samples;
+
 
     UINT32 max_frame_count;
 
+
     // DEBUG
     bool done = false;
+    int index = 0;
     int tries = 0;
 
     filter_data* hrtf_database;
@@ -210,8 +231,8 @@ public:
             void* pvDst = pOutputProcessParameters[0].pBuffer; //output: put processed data here 
             assert(pvDst != NULL);
 
-            float* pvSrcf = static_cast<float*>(pvSrc); // input, as float
-            float* pvDstf = static_cast<float*>(pvDst); // output, as float
+            float* pvSrcf = static_cast<float*>(pvSrc); // input, as float, mono
+            float* pvDstf = static_cast<float*>(pvDst); // output, as float, stereo
 
 
             UINT32 len = pInputProcessParameters[0].ValidFrameCount * m_uChannels;
@@ -252,23 +273,28 @@ public:
                 process_samples.size = fft_n;
 
                 // Apply Hann Window
-                //applyHannWindow(*process_samples.pdata);
+                //applyHannWindow(process_samples);
 
                 // Convert to freq domain
-                fft(*process_samples.pdata);
+                fft(process_samples);
 
                 // Set DC bin to 0
                 (*process_samples.pdata)[0] = Complex(0, 0);
 
-                // Apply convolution
+                // Apply convolution, for each channel
                 for (unsigned i = 0; i < process_samples.size; i++) {
-                    (*process_samples.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.left)[i];
+                    //(*process_samples.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.left)[i];
+                    (*processed_samples.left.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.left)[i];
+                    (*processed_samples.right.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.right)[i];
                 }
 
-                // Convert back to time domain
-                ifft(*process_samples.pdata);
+                processed_samples.left.size = processed_samples.right.size = process_samples.size;
 
-                //std::cout << "samples\tprocessed " << step_size << " real frames," << process_samples.size << " total" << std::endl;
+                // Convert back to time domain, each channel
+                ifft(processed_samples.left);
+                ifft(processed_samples.right);
+
+                //std::cout << "samples\tprocessed " << step_size << " real frames, " << process_samples.size << " total" << std::endl;
 
                 // Save samples we're not using this cycle
                 size_t extra_samples = new_len - step_size;
@@ -279,35 +305,48 @@ public:
                 }
 
                 saved_samples.size = extra_samples;
-                //std::cout << "samples\tsaved " << saved_samples.size << " real frames" << std::endl;
+               // std::cout << "samples\tsaved " << saved_samples.size << " real frames" << std::endl;
 
                
-                // Sum last computed frames to first freshly computed ones
-                if (to_sum_samples.size > 0) {
-                    for (unsigned i = 0; i < to_sum_samples.size; i++) {
-                        (*process_samples.pdata)[i] += (*to_sum_samples.pdata)[i].real();
+                // Sum last computed frames to first freshly computed ones, on each channel
+                if (to_sum_samples.left.size > 0 || to_sum_samples.right.size > 0) {
+                    for (unsigned i = 0; i < to_sum_samples.left.size; i++) {
+                        (*processed_samples.left.pdata)[i] += (*to_sum_samples.left.pdata)[i].real();
                     }
-                    to_sum_samples.size = 0;
+                    to_sum_samples.left.size = 0;
+
+                    for (unsigned i = 0; i < to_sum_samples.right.size; i++) {
+                        (*processed_samples.right.pdata)[i] += (*to_sum_samples.right.pdata)[i].real();
+                    }
+                    to_sum_samples.right.size = 0;
                 }
 
 
                 //processed samples, go to a queue
-                for (unsigned i = 0; i < process_samples.size - fir_size + 1; i++) {
-                    (*ready_samples.pdata)[i + ready_samples.size] = (*process_samples.pdata)[i].real();
+                for (unsigned i = 0; i < processed_samples.left.size - fir_size + 1; i++) {
+                    (*ready_samples.left.pdata)[i + ready_samples.left.size] = (*processed_samples.left.pdata)[i].real();
                 }
+                ready_samples.left.size = ready_samples.left.size + processed_samples.left.size - fir_size + 1;
 
-                ready_samples.size = ready_samples.size + process_samples.size - fir_size + 1;
-
-
-                // save M - 1 to sum
-                for (unsigned i = process_samples.size - fir_size + 1; i < process_samples.size; i++) {
-                    (*to_sum_samples.pdata)[i - (process_samples.size - fir_size + 1)] = (*process_samples.pdata)[i].real();
+                for (unsigned i = 0; i < processed_samples.right.size - fir_size + 1; i++) {
+                    (*ready_samples.right.pdata)[i + ready_samples.right.size] = (*processed_samples.right.pdata)[i].real();
                 }
+                ready_samples.right.size = ready_samples.right.size + processed_samples.right.size - fir_size + 1;
 
-                to_sum_samples.size = process_samples.size - (process_samples.size - fir_size + 1);
 
-                //std::cout << "samples\tready: " << ready_samples.size << " frames" << std::endl;
-                //std::cout << "samples\tto sum: " << to_sum_samples.size << " frames" << std::endl;
+                // save M - 1 to sum, on each channel
+                for (unsigned i = processed_samples.left.size - fir_size + 1; i < processed_samples.left.size; i++) {
+                    (*to_sum_samples.left.pdata)[i - (processed_samples.left.size - fir_size + 1)] = (*processed_samples.left.pdata)[i].real();
+                }
+                to_sum_samples.left.size = processed_samples.left.size - (processed_samples.left.size - fir_size + 1);
+                
+                for (unsigned i = processed_samples.right.size - fir_size + 1; i < processed_samples.right.size; i++) {
+                    (*to_sum_samples.right.pdata)[i - (processed_samples.right.size - fir_size + 1)] = (*processed_samples.right.pdata)[i].real();
+                }
+                to_sum_samples.right.size = processed_samples.right.size - (processed_samples.right.size - fir_size + 1);
+
+                //std::cout << "samples\tready: " << ready_samples.left.size << " frames" << std::endl;
+                //std::cout << "samples\tto sum: " << to_sum_samples.left.size << " frames" << std::endl;
 
                 
             }
@@ -315,26 +354,36 @@ public:
             pOutputProcessParameters[0].ValidFrameCount = 0;
 
             // If we have processed samples, return them to xaudio2
-            if (ready_samples.size > 0) {
+            if (ready_samples.left.size > 0 || ready_samples.right.size > 0) {
 
 
-                UINT32 limit = min(ready_samples.size, this->max_frame_count);
-                //std::cout << "buffer: " << limit << " frames" << std::endl;
+                UINT32 limit = min((UINT32)ready_samples.left.size, this->max_frame_count * 2);
+                size_t size_obuffer = limit + (limit % 2);
+                //std::cout << "buffer: " << size_obuffer << " frames" << std::endl;
 
 
                 //Put into output buffer
-                for (unsigned i = 0; i < limit; i++) {
-                    pvDstf[i] = (float)(*ready_samples.pdata)[i].real();
+                for (unsigned i = 0; i < size_obuffer; i+=2) {
+                    pvDstf[i]     = (float)(*ready_samples.left.pdata)[i / 2].real();
+                    pvDstf[i + 1] = (float)(*ready_samples.right.pdata)[i / 2].real();
                 }
+
+                size_t ch_size = size_obuffer / 2;
 
                 //Rotate and refresh size counter
-                for (unsigned i = limit; i < ready_samples.size; i++) {
-                    (*ready_samples.pdata)[i - limit] = (*ready_samples.pdata)[i];
+                for (unsigned i = ch_size; i < ready_samples.left.size; i++) {
+                    (*ready_samples.left.pdata)[i - ch_size] = (*ready_samples.left.pdata)[i];
                 }
 
-                ready_samples.size = ready_samples.size - limit;
+                for (unsigned i = ch_size; i < ready_samples.right.size; i++) {
+                    (*ready_samples.right.pdata)[i - ch_size] = (*ready_samples.right.pdata)[i];
+                }
 
-                pOutputProcessParameters[0].ValidFrameCount = limit;
+                ready_samples.left.size = ready_samples.left.size - ch_size;
+                ready_samples.right.size = ready_samples.right.size - ch_size;
+
+
+                pOutputProcessParameters[0].ValidFrameCount = size_obuffer;
             }
             
 

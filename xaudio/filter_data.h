@@ -9,12 +9,19 @@
 #include <complex>
 #include <valarray>
 
+const double PI = 3.141592653589793238460;
+
 typedef std::complex<double> Complex;
 typedef std::valarray<Complex> CArray;
 
 struct data_buffer {
     CArray* pdata;
     unsigned size;
+};
+
+struct stereo_data_buffer {
+    data_buffer left;
+    data_buffer right;
 };
 
 struct raw_data {
