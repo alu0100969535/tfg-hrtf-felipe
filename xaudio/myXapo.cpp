@@ -11,43 +11,40 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, filter_data* filters, size_t 
     new_samples.size = 0;
 
     //UINT32 fir_size = filters[0].data.buffer->AudioBytes / 2; // We have 2 interleaved channels, so half samples for each filter 
-    fir_size = 128;                     // M
+    fir_size = 128;                            // M
     fft_n = 8 * pow(2, ceil(log2(fir_size)));  // N
     step_size = fft_n - (fir_size - 1);        // L
 
-
+    // Start preparing filters
     for (unsigned i = 0; i < filters_size; i++) {
 
         CArray hrtf_temp = CArray();
 
         UINT32 size = filters[i].data.buffer->AudioBytes / 2;
         
+        // Convert data into CArray
         transformData(hrtf_temp, (int16_t*)filters[i].data.buffer->pAudioData, size, size);
 
+        // De-interleave so we have channels separated
         CArray left  = hrtf_temp[std::slice(0, hrtf_temp.size() / 2, 2)];
         CArray right = hrtf_temp[std::slice(1, hrtf_temp.size() / 2, 2)];
+        assert(left.size() == right.size());
 
-        //std::cout << "i: " << i << std::endl;
-
+        // Copy data to fir structure, so we can have its FFT
         filters[i].fir.left = new CArray(fft_n);
         filters[i].fir.right = new CArray(fft_n);
 
         for (unsigned j = 0; j < left.size(); j++) {
             (*filters[i].fir.left)[j] = left[j];
-        }
-
-        for (unsigned j = left.size(); j < fft_n; j++) {
-            (*filters[i].fir.left)[j] = Complex(0, 0);
-        }
-
-        for (unsigned j = 0; j < right.size(); j++) {
             (*filters[i].fir.right)[j] = right[j];
         }
-
-        for (unsigned j = right.size(); j < fft_n; j++) {
+        // Pad with 0's to match N
+        for (unsigned j = left.size(); j < fft_n; j++) {
+            (*filters[i].fir.left)[j] = Complex(0, 0);
             (*filters[i].fir.right)[j] = Complex(0, 0);
         }
 
+        // Convert to frequency domain
         fft(*filters[i].fir.left);
         fft(*filters[i].fir.right);
 
@@ -75,9 +72,9 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, filter_data* filters, size_t 
     to_sum_samples.right.pdata = new CArray(fir_size);
     to_sum_samples.right.size = 0;
 
-    ready_samples.left.pdata = new CArray(fft_n * 200);
+    ready_samples.left.pdata = new CArray(fft_n * 2);
     ready_samples.left.size = 0;
-    ready_samples.right.pdata = new CArray(fft_n * 200);
+    ready_samples.right.pdata = new CArray(fft_n * 2);
     ready_samples.right.size = 0;
 
 }
