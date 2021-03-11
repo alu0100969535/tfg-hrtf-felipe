@@ -40,25 +40,26 @@
 
 // Debug function, writes to file so we can plot some samples
 // TODO: Remove this when done
-inline void outputToFile(CArray& arr, const int tries, const bool real = false) {
+inline void outputToFile(data_buffer& arr, const std::string name, const int tries, const bool real = false) {
     std::ofstream myfile;
-    const std::string file = "C:\\Users\\faaa9\\AppData\\Roaming\\WickedEngineDev\\example" + std::to_string(tries) + ".txt";
+    std::string dom = real ? "time" : "freq";
+    const std::string file = "C:\\Users\\faaa9\\AppData\\Roaming\\WickedEngineDev\\"+ name + "_" + std::to_string(tries) + "_" + dom + ".txt";
     myfile.open(file);
 
     if (!myfile.is_open()) {
         assert(0);
     }
 
-    int limit = real ? arr.size() : arr.size() / 2;
+    int limit = real ? arr.size : arr.size / 2;
 
     for (int i = 0; i < limit; i += 1) {
-        double magnitude = sqrt(arr[i].real() * arr[i].real() + arr[i].imag() * arr[i].imag());
+        double magnitude = sqrt((*arr.pdata)[i].real() * (*arr.pdata)[i].real() + (*arr.pdata)[i].imag() * (*arr.pdata)[i].imag());
 
         // Only real part needed when plotting time-domain 
         if (real) {
-            myfile << (arr[i].real()) << "," << i << std::endl;
+            myfile << ((*arr.pdata)[i].real()) << "," << i << std::endl;
         } else {
-            myfile << magnitude << "," << i * (44100 / arr.size()) << std::endl;
+            myfile << magnitude << "," << i * (44100 / arr.size) << std::endl;
         }
     }
 
@@ -130,7 +131,6 @@ inline void ifft(data_buffer& x)
     (*x.pdata) /= x.size;
 }
 
-
 // Perform hannWindow in-place only to real part
 inline void applyHannWindow(data_buffer& arr) {
 
@@ -162,7 +162,7 @@ private:
     stereo_data_buffer to_sum_samples;
 
     filter_data* hrtf_database;
-
+    size_t n_filters;
 
     // DEBUG
     bool done = false;
@@ -276,7 +276,7 @@ public:
 
                 //// Start overlap-add ////
 
-                // Apply Hann Window
+                // Apply Hann Window TODO: Modificar y hacer que aplique la ventana a todo la señal y no a este trozo solo
                 //applyHannWindow(process_samples);
 
                 // Convert to freq domain
@@ -285,10 +285,23 @@ public:
                 // Set DC bin to 0
                 (*process_samples.pdata)[0] = Complex(0, 0);
 
+                
+                // TODO: Hacer una función de búsqueda o indexado
+                int index_hrtf = 0;
+
+                for (int i = 0; i < n_filters; i++) {
+                    if (hrtf_database[i].angle == 90 && hrtf_database[i].elevation == 0) {
+                        index_hrtf = i;
+                        break;
+                    }
+                }
+
+                //std::cout << "angle: " << hrtf_database[index_hrtf].angle << " elev: " << hrtf_database[index_hrtf].elevation << std::endl;
+
                 // Apply convolution, for each channel
                 for (unsigned i = 0; i < process_samples.size; i++) {
-                    (*processed_samples.left.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.left)[i];
-                    (*processed_samples.right.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[0].fir.right)[i];
+                    (*processed_samples.left.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[index_hrtf].fir.left)[i];
+                    (*processed_samples.right.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[index_hrtf].fir.right)[i];
                 }
                 processed_samples.left.size = processed_samples.right.size = process_samples.size;
 
@@ -323,6 +336,9 @@ public:
                 to_sum_samples.left.size = to_sum_samples.right.size = sizepr - (sizepr - overlap);
 
                 //// End overlap-add ////
+                //outputToFile(ready_samples.left, "ready_samples.left", tries, true);
+                //outputToFile(ready_samples.right, "ready_samples.right", tries, true);
+                //tries++;
             }
 
             // If we have processed samples, return them to xaudio2
@@ -355,7 +371,7 @@ public:
                 pOutputProcessParameters[0].ValidFrameCount = 0;
             }
 
-            new_samples.size = 0;
+            
 
             //// DEBUG ////
             /*
@@ -365,9 +381,17 @@ public:
                     done = true;
                 }
 
-                outputToFile(*(ready_samples.left.pdata), tries, true);
-            }
+                //outputToFile(processed_samples.left,"processed_samples.left" , tries, true);
+                //outputToFile(processed_samples.right,"processed_samples.right" , tries, true);
 
+                outputToFile(ready_samples.left,"ready_samples.left" ,tries, true);
+                outputToFile(ready_samples.right, "ready_samples.right", tries, true);
+            }
+            */
+            new_samples.size = 0;
+            processed_samples.left.size = processed_samples.right.size = 0;
+
+            /*
             if(new_len > step_size)
                 std::cout << "samples\tprocessed " << step_size << " real frames, " << process_samples.size << " total" << std::endl;
             std::cout << "samples\tsaved: " << saved_samples.size << " frames in total" << std::endl;

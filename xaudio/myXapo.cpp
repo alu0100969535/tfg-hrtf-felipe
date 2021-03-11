@@ -54,6 +54,7 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, filter_data* filters, size_t 
     }
 
     hrtf_database = filters;
+    n_filters = filters_size;
 
 
     saved_samples.pdata = new CArray(step_size + new_samples.size);

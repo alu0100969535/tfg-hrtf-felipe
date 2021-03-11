@@ -27,6 +27,7 @@
 #include <array>
 
 #include "filter_data.h"
+#include "coordinates.h"
 
 
 #ifdef _XBOX //Big-Endian
@@ -189,7 +190,7 @@ int loadFilters(filter_data* filters, size_t* size) {
         std::string elevation = to_string(elevations[i]);
         std::string folder = name + elevation;
 
-        for (unsigned j = 0; j < 180; j += 5) {
+        for (unsigned j = 0; j <= 180; j += 5) {
 
             std::stringstream file;
             file << elevation << "e";
@@ -240,7 +241,7 @@ el filtro que está especificado en myXapo
 int main() { 
     HRESULT hr;
 
-    // Required for xAPO processing
+    // Required for xAudio2
     hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (FAILED(hr)) {
         std::cout << "CoInitializeEx() failed" << std::endl;
@@ -305,7 +306,7 @@ int main() {
     IXAudio2SubmixVoice* pSFXSubmixVoice = NULL;
     hr = pXAudio2->CreateSubmixVoice(&pSFXSubmixVoice, 1, 44100, 0, 0, 0, &chain);
     if (FAILED(hr)) {
-        std::cout << "CreateMasteringVoice() failed" << std::endl;
+        std::cout << "CreateSubmixVoice() failed" << std::endl;
         assert(0);
         return false;
     }
@@ -369,6 +370,9 @@ int main() {
 
     // Pausing so we can hear the sound when loaded
     system("pause");
+
+    // Close COM Library
+    CoUninitialize();
 
     // Nothing more to do, exit...
     return 0;
