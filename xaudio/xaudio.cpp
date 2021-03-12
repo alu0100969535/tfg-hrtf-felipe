@@ -172,12 +172,10 @@ HRESULT openWav(const LPCSTR name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& bu
     buffer.LoopBegin = UINT32(0);
 }
 
-
-// TODO: Load all elevations
-// TODO: FFT all buffers here? Maybe in myXapo
 int loadFilters(filter_data* filters, size_t* size) {
     
-    const array<int,5/*14*/> elevations = {/*-40, -30,*/ -20, -10, 0, 10, 20, /*30, 40, 50, 60, 70, 80, 90*/};
+    const array<int, 14> elevations = {-40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+    const array<double, 14> azimuth_inc = {6.43, 6.00, 5.00, 5.00, 5.00, 5.00, 5.00, 6.00, 6.43, 8.00, 10.00, 15.00, 30.00, 91};
     
     std::string prevPath = "filters";
     std::string name = "elev";
@@ -190,16 +188,16 @@ int loadFilters(filter_data* filters, size_t* size) {
         std::string elevation = to_string(elevations[i]);
         std::string folder = name + elevation;
 
-        for (unsigned j = 0; j <= 180; j += 5) {
+        unsigned j = 0;
+        while((j + 1) * azimuth_inc[i] <= 180) {
+
+            unsigned azimuth = round(azimuth_inc[i] * j);
 
             std::stringstream file;
             file << elevation << "e";
-            file << std::setfill('0') << std::setw(3) << j << "a.wav";
+            file << std::setfill('0') << std::setw(3) <<(unsigned) azimuth << "a.wav";
 
             std::string path = prevPath + separator + folder + separator + start + file.str();
-
-            //std::cout << pathFileR << std::endl << pathFileL << std::endl;
-
             // Start importing .wav
             WAVEFORMATEXTENSIBLE *wfx = new WAVEFORMATEXTENSIBLE({ 0 });
             XAUDIO2_BUFFER *buffer = new XAUDIO2_BUFFER({ 0 });
@@ -207,7 +205,6 @@ int loadFilters(filter_data* filters, size_t* size) {
             HRESULT hr = openWav(path.c_str(), *wfx, *buffer);
             if (FAILED(hr)) {
                 std::cout << "Couldn't open " << path << "." << std::endl;
-                //assert(0);
                 return hr;
             }
 
@@ -221,11 +218,11 @@ int loadFilters(filter_data* filters, size_t* size) {
                     NULL,
                 },
                 elevations[i],
-                j,
+                azimuth,
             };
             index++;
-
-           
+            j++;
+            
         }
 
     }
