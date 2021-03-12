@@ -18,8 +18,12 @@ inline double degree2rad(double input) {
 	return input * (PI / 180);
 }
 
+inline double rad2degree(double input) {
+	return input * (180 / PI);
+}
+
 // Gets spherical coords in degrees to cartesian 3D
-inline cartesian_coordinates3d cartesian3d_to_spherical(spherical_coordinates input) {
+inline cartesian_coordinates3d spherical2cartesian(spherical_coordinates input) {
 	return cartesian_coordinates3d {
 		input.radius * cos(input.azimuth) * cos(input.elevation),	// x
 		input.radius * sin(input.azimuth) * cos(input.elevation),	// y
@@ -28,7 +32,7 @@ inline cartesian_coordinates3d cartesian3d_to_spherical(spherical_coordinates in
 }
 
 // Gets cartesian coords in degrees to spherical in radians
-inline spherical_coordinates spherical_to_cartesian(cartesian_coordinates3d input) {
+inline spherical_coordinates cartesian3d2spherical(cartesian_coordinates3d input) {
 	return spherical_coordinates {
 		sqrt(pow(input.x, 2) + pow(input.y, 2) + pow(input.z, 2)),	// radius
 		atan2(input.y, input.x),									// azimuth

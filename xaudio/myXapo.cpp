@@ -2,10 +2,16 @@
 #include "myXapo.h"
 #include "filter_data.h"
 
-myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, filter_data* filters, size_t filters_size) : CXAPOBase(prop) {
+myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, BYTE* params, UINT32 params_size ,filter_data* filters, size_t filters_size, size_t signal_size) : CXAPOBase(prop), CXAPOParametersBase(prop, params, params_size, false) {
 
     m_uChannels = 1;
     m_uBytesPerSample = 0;
+
+    signal_i = 0;
+    this->signal_size = signal_size;
+
+    index_hrtf = 0;
+    flip_filters = false;
 
     new_samples.pdata = new CArray(512);
     new_samples.size = 0;
@@ -68,9 +74,9 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, filter_data* filters, size_t 
     processed_samples.right.pdata = new CArray(fft_n);
     processed_samples.right.size = 0;
 
-    to_sum_samples.left.pdata = new CArray(fir_size);
+    to_sum_samples.left.pdata = new CArray(fft_n/*fir_size - 1*/);
     to_sum_samples.left.size = 0;
-    to_sum_samples.right.pdata = new CArray(fir_size);
+    to_sum_samples.right.pdata = new CArray(fft_n/*fir_size - 1*/);
     to_sum_samples.right.size = 0;
 
     ready_samples.left.pdata = new CArray(fft_n * 2);
@@ -89,4 +95,52 @@ myXapo::~myXapo() {
     delete to_sum_samples.right.pdata;
     delete ready_samples.left.pdata;
     delete ready_samples.right.pdata;
+}
+
+void myXapo::changeFilter(spherical_coordinates input) {
+    
+    unsigned index = -1;
+
+    spherical_coordinates coords = input;
+
+    this->flip_filters = false;
+    if (coords.azimuth < 0) {
+        flip_filters = true;
+        coords.azimuth = -coords.azimuth;
+    }
+    //std::cout << "XAPO" << " azimuth: " << rad2degree(coords->azimuth) << " elevation: " << rad2degree(coords->elevation) << " radius: " << coords->radius << std::endl;
+
+    double minDiffE = 500000;
+    int min_Elevation = -1;
+
+    for (int i = 0; i < this->n_filters; i++) {
+        double diffE = abs(this->hrtf_database[i].elevation - /*rad2degree(*/input.elevation/*)*/);
+        if (diffE < minDiffE) {
+            minDiffE = diffE;
+            min_Elevation = this->hrtf_database[i].elevation;
+        }
+    }
+
+    double minDiffA = 500000;
+    int min_Azimuth = -1;
+    for (int i = 0; i < this->n_filters; i++) {
+        if (this->hrtf_database[i].elevation == min_Elevation) {
+
+            double diffA = abs(this->hrtf_database[i].angle - /*rad2degree(*/coords.azimuth/*)*/);
+
+            if (diffA < minDiffA) {
+                minDiffA = diffA;
+                min_Azimuth = this->hrtf_database[i].angle;
+            }
+        }
+    }
+
+    for (int i = 0; i < n_filters; i++) {
+        if (this->hrtf_database[i].angle == min_Azimuth && this->hrtf_database[i].elevation == min_Elevation) {
+            index = i;
+            break;
+        }
+    }
+
+    this->index_hrtf = index;
 }

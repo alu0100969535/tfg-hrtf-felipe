@@ -172,6 +172,11 @@ HRESULT openWav(const LPCSTR name, WAVEFORMATEXTENSIBLE& wfx, XAUDIO2_BUFFER& bu
     buffer.LoopBegin = UINT32(0);
 }
 
+
+void setPosition(IXAPOParameters* effect, spherical_coordinates position) {
+    effect->SetParameters(&position, sizeof(position));
+}
+
 int loadFilters(filter_data* filters, size_t* size) {
     
     const array<int, 14> elevations = {-40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
@@ -285,8 +290,28 @@ int main() {
     prop.MaxOutputBufferCount = 1;
     prop.MinOutputBufferCount = 1;
 
+    spherical_coordinates* sync = static_cast<spherical_coordinates*>(malloc(sizeof(spherical_coordinates) * 3));
+
+    for (unsigned i = 0; i < 3; i++)
+        sync[i] = { 0, 0, 0 };
+
+
+    // Start importing .wav
+    WAVEFORMATEXTENSIBLE wfx = { 0 };
+    XAUDIO2_BUFFER buffer = { 0 };
+
+#ifdef _XBOX
+    char* strFileName = "game:\\media\\MusicMono.wav";
+#else
+    const std::string strFileName = "test_audio\\440hz.wav";
+    //const std::string strFileName = "test_audio\\motor.wav";
+    //const std::string strFileName = "test_audio\\guitar-harmonics.wav";
+#endif
+
+    openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
+
     // Load custom Xapo instance
-    IUnknown* pXAPO = new myXapo(&prop, filters, *filters_size);
+    IXAPOParameters* pXAPO = new myXapo(&prop, (BYTE*) sync,(UINT32) sizeof(cartesian_coordinates3d), filters, *filters_size, buffer.AudioBytes / 4);
 
     // Structure for custom xAPO
     XAUDIO2_EFFECT_DESCRIPTOR descriptor;
@@ -315,19 +340,6 @@ int main() {
     pXAudio2->SetDebugConfiguration(&debugConfig);
 #endif // _DEBUG
 
-    // Start importing .wav
-    WAVEFORMATEXTENSIBLE wfx = { 0 };
-    XAUDIO2_BUFFER buffer = { 0 };
-
-
-#ifdef _XBOX
-    char* strFileName = "game:\\media\\MusicMono.wav";
-#else
-    const std::string strFileName = "test_audio\\440hz.wav";
-    //const std::string strFileName = "test_audio\\motor.wav";
-#endif
-
-    openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
 
     // Populate structures for xaudio2, so it knows where to send data
     XAUDIO2_SEND_DESCRIPTOR voice;
@@ -355,6 +367,9 @@ int main() {
         return false;
     }
 
+    //setPosition(pXAPO, cartesian3d2spherical({ 1, 1, 1.75 }));
+    setPosition(pXAPO, { 1.4, 0, 0 });
+
     // Play the sound (when ready)
     hr = pSourceVoice->Start(0);
     if (FAILED(hr)) {
@@ -365,8 +380,48 @@ int main() {
 
     std::cout << "Everything loaded!" << std::endl;
 
-    // Pausing so we can hear the sound when loaded
-    system("pause");
+    //cartesian_coordinates3d sound = {1.4, 5, 1.75};
+    cartesian_coordinates3d player = {0, 0, 1.75};    //Player ears
+
+    spherical_coordinates sound = { 1.4, 0, 0 };
+
+    bool forward = true;
+
+    // TODO: Change from spherical to cartesian
+    while (true) {
+        // Pausing so we can hear the sound
+        system("pause");
+
+        sound.azimuth = sound.azimuth + 5;
+
+        if (abs(sound.azimuth) == 180) {
+            sound.azimuth = -sound.azimuth;
+        }
+        std::cout << "changing to azimuth: " << sound.azimuth << " elevation: " << sound.elevation << " radius: " << sound.radius << std::endl;
+
+        setPosition(pXAPO, sound);
+    }
+
+    /*while (true) {
+        // Pausing so we can hear the sound when loaded
+        system("pause");
+        if (forward) {
+            sound.y = sound.y + 1;
+        }
+        else {
+            sound.y = sound.y - 1;
+        }
+        if (abs(sound.y) == 5) forward = !forward;
+
+        cartesian_coordinates3d travel;
+        travel.x = sound.x - player.x;
+        travel.y = sound.y - player.y;
+        travel.z = sound.z - player.z;
+
+        setPosition(pXAPO, cartesian3d2spherical(travel));
+        std::cout << "changing to x: " << travel.x  << " y: "<< travel.y << " z: " << travel.z << std::endl;
+        std::cout << "changing to azimuth: " << rad2degree(cartesian3d2spherical(travel).azimuth) << " elevation: " << rad2degree(cartesian3d2spherical(travel).elevation) << " radius: " << cartesian3d2spherical(travel).radius << std::endl;
+    }*/
 
     // Close COM Library
     CoUninitialize();

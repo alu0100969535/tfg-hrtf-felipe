@@ -7,6 +7,7 @@
 #include <assert.h>
 
 #include "filter_data.h"
+#include "coordinates.h"
 
 #include <complex>
 #include <iostream>
@@ -132,6 +133,8 @@ inline void ifft(data_buffer& x)
 }
 
 // Perform hannWindow in-place only to real part
+// start is the first value to apply this window
+// total_size is the size of the entire signal
 inline void applyHannWindow(data_buffer& arr) {
 
     const size_t size = arr.size;
@@ -142,12 +145,17 @@ inline void applyHannWindow(data_buffer& arr) {
     }
 }
 
-class myXapo : public CXAPOBase {
+
+
+class myXapo : public CXAPOBase, public CXAPOParametersBase {
 
 private:
     WORD m_uChannels;
     WORD m_uBytesPerSample;
     UINT32 max_frame_count;
+
+    size_t signal_size;
+    size_t signal_i;
 
     size_t fft_n;
     size_t step_size;
@@ -164,16 +172,22 @@ private:
     filter_data* hrtf_database;
     size_t n_filters;
 
+    unsigned index_hrtf;
+    bool flip_filters;
+
     // DEBUG
     bool done = false;
     int index = 0;
     int tries = 0;
 
+
+    void changeFilter(spherical_coordinates input);
+
     
 
 public:
 
-    myXapo(XAPO_REGISTRATION_PROPERTIES* pRegistrationProperties, filter_data* filters, size_t filters_size);
+    myXapo(XAPO_REGISTRATION_PROPERTIES* pRegistrationProperties, BYTE* params, UINT32 params_size, filter_data* filters, size_t filters_size, size_t signal_size);
     ~myXapo();
 
     STDMETHOD(LockForProcess) (UINT32 InputLockedParameterCount,
@@ -181,7 +195,7 @@ public:
         UINT32 OutputLockedParameterCount,
         const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS* pOutputLockedParameters)
     {
-        assert(!IsLocked());
+        //assert(!IsLocked());
         assert(InputLockedParameterCount == 1);
         assert(OutputLockedParameterCount == 1);
         assert(pInputLockedParameters != NULL);
@@ -205,7 +219,8 @@ public:
         XAPO_PROCESS_BUFFER_PARAMETERS* pOutputProcessParameters,
         BOOL IsEnabled)
     {
-        assert(IsLocked());
+        BYTE* params = BeginProcess();
+        //assert(IsLocked());
         assert(InputProcessParameterCount == 1);
         assert(OutputProcessParameterCount == 1);
         assert(NULL != pInputProcessParameters);
@@ -265,6 +280,12 @@ public:
                 }
                 process_samples.size = fft_n;
 
+                signal_i += step_size;
+
+                //outputToFile(new_samples, "new_samples", tries, true);
+                //outputToFile(ready_samples.right, "ready_samples.right", tries, true);
+                //tries++;
+
                 // Save samples we're not using this cycle
                 size_t extra_samples = new_len - step_size;
                 size_t index = new_samples.size - extra_samples;
@@ -285,23 +306,26 @@ public:
                 // Set DC bin to 0
                 (*process_samples.pdata)[0] = Complex(0, 0);
 
+                spherical_coordinates* coords = (spherical_coordinates*)(params);
                 
-                // TODO: Hacer una función de búsqueda o indexado
-                int index_hrtf = 0;
+                changeFilter(*coords);
 
-                for (int i = 0; i < n_filters; i++) {
-                    if (hrtf_database[i].angle == 90 && hrtf_database[i].elevation == 0) {
-                        index_hrtf = i;
-                        break;
+                std::cout << "angle: " << hrtf_database[this->index_hrtf].angle << " elev: " << hrtf_database[this->index_hrtf].elevation << std::endl;
+
+
+                if (this->flip_filters) {
+                    // Apply convolution, for each channel
+                    for (unsigned i = 0; i < process_samples.size; i++) {
+                        (*processed_samples.left.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[this->index_hrtf].fir.right)[i];
+                        (*processed_samples.right.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[this->index_hrtf].fir.left)[i];
                     }
                 }
-
-                //std::cout << "angle: " << hrtf_database[index_hrtf].angle << " elev: " << hrtf_database[index_hrtf].elevation << std::endl;
-
-                // Apply convolution, for each channel
-                for (unsigned i = 0; i < process_samples.size; i++) {
-                    (*processed_samples.left.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[index_hrtf].fir.left)[i];
-                    (*processed_samples.right.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[index_hrtf].fir.right)[i];
+                else {
+                    // Apply convolution, for each channel
+                    for (unsigned i = 0; i < process_samples.size; i++) {
+                        (*processed_samples.left.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[this->index_hrtf].fir.left)[i];
+                        (*processed_samples.right.pdata)[i] = (*process_samples.pdata)[i] * (*hrtf_database[this->index_hrtf].fir.right)[i];
+                    }
                 }
                 processed_samples.left.size = processed_samples.right.size = process_samples.size;
 
@@ -321,6 +345,7 @@ public:
                 //processed samples, go to a queue, each channel separately
                 size_t sizepr = processed_samples.left.size;
                 size_t overlap = fir_size - 1;
+                //size_t overlap = fft_n / 2;
                 
                 for (unsigned i = 0; i < sizepr - overlap; i++) {
                     (*ready_samples.left.pdata)[i + ready_samples.left.size] = (*processed_samples.left.pdata)[i];
@@ -336,9 +361,9 @@ public:
                 to_sum_samples.left.size = to_sum_samples.right.size = sizepr - (sizepr - overlap);
 
                 //// End overlap-add ////
-                //outputToFile(ready_samples.left, "ready_samples.left", tries, true);
-                //outputToFile(ready_samples.right, "ready_samples.right", tries, true);
-                //tries++;
+
+
+
             }
 
             // If we have processed samples, return them to xaudio2
@@ -420,7 +445,7 @@ public:
 
         // set buffer flags
         pOutputProcessParameters[0].BufferFlags = pInputProcessParameters[0].BufferFlags;     // set destination buffer flags same as source
-
+        EndProcess();
     }
 
 };
