@@ -18,14 +18,6 @@ inline double degree2rad(double input) {
 	return input * (PI / 180);
 }
 
-// Unwind to [0, limit]
-inline double unwind(double input, unsigned limit) {
-	double new_angle = input;
-	while (new_angle < 0) new_angle += limit;
-	while (new_angle >= limit) new_angle -= limit;
-	return new_angle;
-}
-
 // Gets spherical coords in degrees to cartesian 3D
 inline cartesian_coordinates3d cartesian3d_to_spherical(spherical_coordinates input) {
 	return cartesian_coordinates3d {
