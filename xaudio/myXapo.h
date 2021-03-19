@@ -154,9 +154,6 @@ private:
     WORD m_uBytesPerSample;
     UINT32 max_frame_count;
 
-    size_t signal_size;
-    size_t signal_i;
-
     size_t fft_n;
     size_t step_size;
     size_t fir_size;
@@ -180,9 +177,9 @@ private:
     int index = 0;
     int tries = 0;
 
-
     void changeFilter(spherical_coordinates input);
-
+    unsigned getSampleGap(spherical_coordinates input);
+    double getGain(spherical_coordinates input);
     
 
 public:
@@ -280,7 +277,7 @@ public:
                 }
                 process_samples.size = fft_n;
 
-                signal_i += step_size;
+                //signal_i += step_size;
 
                 //outputToFile(new_samples, "new_samples", tries, true);
                 //outputToFile(ready_samples.right, "ready_samples.right", tries, true);
@@ -312,7 +309,7 @@ public:
 
                 std::cout << "angle: " << hrtf_database[this->index_hrtf].angle << " elev: " << hrtf_database[this->index_hrtf].elevation << std::endl;
 
-
+                // In case we need to apply a filter in 2nd or 3rd quadrant, we flip the filters
                 if (this->flip_filters) {
                     // Apply convolution, for each channel
                     for (unsigned i = 0; i < process_samples.size; i++) {
@@ -361,9 +358,6 @@ public:
                 to_sum_samples.left.size = to_sum_samples.right.size = sizepr - (sizepr - overlap);
 
                 //// End overlap-add ////
-
-
-
             }
 
             // If we have processed samples, return them to xaudio2
@@ -415,21 +409,6 @@ public:
             */
             new_samples.size = 0;
             processed_samples.left.size = processed_samples.right.size = 0;
-
-            /*
-            if(new_len > step_size)
-                std::cout << "samples\tprocessed " << step_size << " real frames, " << process_samples.size << " total" << std::endl;
-            std::cout << "samples\tsaved: " << saved_samples.size << " frames in total" << std::endl;
-            std::cout << "samples\tready: " << ready_samples.left.size << " frames" << std::endl;
-            std::cout << "samples\tto sum: " << to_sum_samples.left.size << " frames" << std::endl;
-            std::cout << "buffer_output: " << pOutputProcessParameters[0].ValidFrameCount << " frames" << std::endl;
-            std::cout << "--------------------" << std::endl;
-            
-            */
-            //// DEBUG-END ////
-
-            // Copy result to output buffer
-            //memcpy(pvDst, pvSrc, pInputProcessParameters[0].ValidFrameCount * m_uChannels * m_uBytesPerSample);
 
             break;
         }

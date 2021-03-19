@@ -7,9 +7,6 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, BYTE* params, UINT32 params_s
     m_uChannels = 1;
     m_uBytesPerSample = 0;
 
-    signal_i = 0;
-    this->signal_size = signal_size;
-
     index_hrtf = 0;
     flip_filters = false;
 
@@ -108,25 +105,25 @@ void myXapo::changeFilter(spherical_coordinates input) {
         flip_filters = true;
         coords.azimuth = -coords.azimuth;
     }
-    //std::cout << "XAPO" << " azimuth: " << rad2degree(coords->azimuth) << " elevation: " << rad2degree(coords->elevation) << " radius: " << coords->radius << std::endl;
 
     double minDiffE = 500000;
     int min_Elevation = -1;
-
+    // Search for good elevation
     for (int i = 0; i < this->n_filters; i++) {
-        double diffE = abs(this->hrtf_database[i].elevation - /*rad2degree(*/input.elevation/*)*/);
+        double diffE = abs(this->hrtf_database[i].elevation - input.elevation);
         if (diffE < minDiffE) {
             minDiffE = diffE;
             min_Elevation = this->hrtf_database[i].elevation;
         }
     }
 
+    //Search for an azimuth with best elevation found
     double minDiffA = 500000;
     int min_Azimuth = -1;
     for (int i = 0; i < this->n_filters; i++) {
         if (this->hrtf_database[i].elevation == min_Elevation) {
 
-            double diffA = abs(this->hrtf_database[i].angle - /*rad2degree(*/coords.azimuth/*)*/);
+            double diffA = abs(this->hrtf_database[i].angle - coords.azimuth);
 
             if (diffA < minDiffA) {
                 minDiffA = diffA;
@@ -134,7 +131,7 @@ void myXapo::changeFilter(spherical_coordinates input) {
             }
         }
     }
-
+    // Get the best filter we found
     for (int i = 0; i < n_filters; i++) {
         if (this->hrtf_database[i].angle == min_Azimuth && this->hrtf_database[i].elevation == min_Elevation) {
             index = i;
@@ -143,4 +140,21 @@ void myXapo::changeFilter(spherical_coordinates input) {
     }
 
     this->index_hrtf = index;
+}
+
+unsigned myXapo::getSampleGap(spherical_coordinates input) {
+    const double gapPerMeter = 128.57; // Result of 180 samples per 1.4m
+
+    return (unsigned) round(gapPerMeter * input.radius);
+}
+
+double myXapo::getGain(spherical_coordinates input) {
+    // Using 1.4m as reference
+    double distance = 1.4;
+    
+    if (input.radius / distance < 1) {
+        return 0;
+    }
+
+    return (input.radius / distance) * -6; // 6dB for every doubling in distance
 }
