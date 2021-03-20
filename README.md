@@ -1,30 +1,32 @@
-# tfg-videojuegos-felipe
+# tfg-hrtf-felipe
 Añadimos procesamiento de audio 3D a un motor de videojuegos
 
 ## Funcionamiento
+
+Para ver el funcionamiento de la librería: [Wiki](https://github.com/alu0100969535/tfg-hrtf-felipe/wiki)
+
+## Desarrollo:
 
 Primero añadir solución a visual studio, abrir xaudio.sln.
 
 Se puede ejecutar en modo debug (lento) o modo release, directamente desde VisualStudio2019
 
-## Ficheros
+### Ficheros
 
 Hay 3 ficheros:
-* xaudio.cpp - Carga xAudio2 e intenta reproducir un fichero de audio
-* myXapo.h - Definición de la clase de procesamiento
-* myXapo.cpp - Métodos de la clase de procesamiento
+* xaudio.cpp - Carga xAudio2 e intenta reproducir un fichero de audio.
+* myXapo.h - Definición de la clase de procesamiento.
+* myXapo.cpp - Métodos de la clase de procesamiento.
+* coordinates.h - Funciones de ayuda a conversión entre sistemas de coordenadas.
+* filter_data.h - Estructuras para agrupar los datos.
 
-
-## TODO:
-
-* Implementar método overlap-add
-* Estrucuturar mejor los métodos de procesamiento, en un nuevo fichero.
-* Cargar los filtros que quuedan en xaudio.cpp
-* Quitar código innecesario
 
 ## Hecho:
 
 * ~~Subir al repositorio muestras de audio para probar.~~
 * ~~Reparar solución VS2019~~
 * ~~Mover la carga de los filtros de myXapo.cpp a xaudio.cpp~~
-
+* ~~Implementar método overlap-add~~
+* ~~Estrucuturar mejor los métodos de procesamiento, en un nuevo fichero.~~
+* ~~Cargar los filtros que quuedan en xaudio.cpp~~
+* ~~Quitar código innecesario~~
