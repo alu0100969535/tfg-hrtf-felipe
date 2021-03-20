@@ -140,11 +140,10 @@ inline void applyHannWindow(data_buffer& arr) {
     const size_t size = arr.size;
 
     for (int i = 0; i < size; i++) {
-        double multiplier = 0.5 * (1 - cos(2 * PI * i / (size - 1)));
+        double multiplier = 0.5 * (1 - cos(2 * PI * i / size));
         (*arr.pdata)[i] = Complex(multiplier * (*arr.pdata)[i].real(), 0);
     }
 }
-
 
 
 class myXapo : public CXAPOBase, public CXAPOParametersBase {
@@ -176,6 +175,7 @@ private:
     bool done = false;
     int index = 0;
     int tries = 0;
+    int time = 0;
 
     void changeFilter(spherical_coordinates input);
     unsigned getSampleGap(spherical_coordinates input);
@@ -330,6 +330,9 @@ public:
                 ifft(processed_samples.left);
                 ifft(processed_samples.right);
 
+                size_t overlap = (fir_size - 1);
+                //size_t overlap = fft_n / 2;
+
                 // Sum last computed frames to first freshly computed ones, on each channel
                 if (to_sum_samples.left.size > 0) {  
                     for (unsigned i = 0; i < to_sum_samples.left.size; i++) {
@@ -338,11 +341,17 @@ public:
                     }
                     to_sum_samples.left.size = to_sum_samples.right.size = 0;
                 }
+                // We have no available samples to sum, discard first overlap zone samples...
+                else {
+                    for (unsigned i = overlap; i < processed_samples.left.size; i++) {
+                        (*processed_samples.left.pdata)[i - overlap] = (*processed_samples.left.pdata)[i];
+                        (*processed_samples.right.pdata)[i - overlap] = (*processed_samples.right.pdata)[i];
+                    }
+                    processed_samples.left.size = processed_samples.right.size = processed_samples.left.size - overlap;
+                }
 
                 //processed samples, go to a queue, each channel separately
                 size_t sizepr = processed_samples.left.size;
-                size_t overlap = fir_size - 1;
-                //size_t overlap = fft_n / 2;
                 
                 for (unsigned i = 0; i < sizepr - overlap; i++) {
                     (*ready_samples.left.pdata)[i + ready_samples.left.size] = (*processed_samples.left.pdata)[i];
@@ -359,6 +368,9 @@ public:
 
                 //// End overlap-add ////
             }
+           /* outputToFile(ready_samples.left, "ready_samples.left", tries, true);
+            outputToFile(ready_samples.right, "ready_samples.right", tries, true);
+            tries++;*/
 
             // If we have processed samples, return them to xaudio2
             if (ready_samples.left.size > 0) {
@@ -408,7 +420,7 @@ public:
             }
             */
             new_samples.size = 0;
-            processed_samples.left.size = processed_samples.right.size = 0;
+            //processed_samples.left.size = processed_samples.right.size = 0;
 
             break;
         }

@@ -303,8 +303,8 @@ int main() {
 #ifdef _XBOX
     char* strFileName = "game:\\media\\MusicMono.wav";
 #else
-    const std::string strFileName = "test_audio\\440hz.wav";
-    //const std::string strFileName = "test_audio\\motor.wav";
+    //const std::string strFileName = "test_audio\\440hz.wav";
+    const std::string strFileName = "test_audio\\motor.wav";
     //const std::string strFileName = "test_audio\\guitar-harmonics.wav";
 #endif
 
