@@ -14,9 +14,11 @@ Se puede ejecutar en modo debug (lento) o modo release, directamente desde Visua
 ### Ficheros
 
 Hay 3 ficheros:
-* xaudio.cpp - Carga xAudio2 e intenta reproducir un fichero de audio
-* myXapo.h - Definición de la clase de procesamiento
-* myXapo.cpp - Métodos de la clase de procesamiento
+* xaudio.cpp - Carga xAudio2 e intenta reproducir un fichero de audio.
+* myXapo.h - Definición de la clase de procesamiento.
+* myXapo.cpp - Métodos de la clase de procesamiento.
+* coordinates.h - Funciones de ayuda a conversión entre sistemas de coordenadas.
+* filter_data.h - Estructuras para agrupar los datos.
 
 
 ## Hecho:
