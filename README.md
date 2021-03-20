@@ -3,7 +3,7 @@ Añadimos procesamiento de audio 3D a un motor de videojuegos
 
 ## Funcionamiento
 
-Para ver el funcionamiento de la librería: [https://github.com/alu0100969535/tfg-hrtf-felipe/wiki](Wiki)
+Para ver el funcionamiento de la librería: [Wiki](https://github.com/alu0100969535/tfg-hrtf-felipe/wiki)
 
 ## Desarrollo:
 
