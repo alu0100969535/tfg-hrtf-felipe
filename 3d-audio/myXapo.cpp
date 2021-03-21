@@ -153,7 +153,7 @@ double myXapo::getDecibelChange(spherical_coordinates input) {
     // Using 1.4m as reference
     double distance = 1.4;
     
-    if (input.radius / distance < 1) {
+    if (input.radius / distance <= 1) {
         return 0;
     }
 

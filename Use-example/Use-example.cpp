@@ -33,7 +33,7 @@ void loop(IXAPOParameters* pXAPO) {
         travel.y = sound.y - player.y;
         travel.z = sound.z - player.z;
 
-        std::cout << "changing to x: " << travel.x << " y: " << travel.y << " z: " << travel.z << std::endl;
+         std::cout << "Posición  (x,y,z) = (" << travel.x << ", " << travel.y << ", " << travel.z << ")\t\r" << std::flush;
 
         spherical_coordinates final = cartesian3d2spherical(travel);
 
@@ -64,7 +64,7 @@ void loop2(IXAPOParameters* pXAPO, unsigned time) {
                 forward = !forward;
             }
         }
-        std::cout << "changing to azimuth: " << sound.azimuth << " elevation: " << sound.elevation << " radius: " << sound.radius << std::endl;
+        std::cout << "Posición (azimut, elevación, radio): (" << sound.azimuth << ", " << sound.elevation << ", " << sound.radius << ")\t\r" << std::flush;
 
         a3d::setPosition(pXAPO, sound);
 
@@ -72,7 +72,25 @@ void loop2(IXAPOParameters* pXAPO, unsigned time) {
     }
 }
 
+unsigned launchInterface() {
+
+    setlocale(LC_ALL, "");
+    std::cout << "Eso es un ejemplo de uso de la librería 3d-audio." << std::endl << std::endl;
+    
+    std::cout << "0. Onda sinusoidal de 440Hz,\tfuente de sonido girando alrededor del oyente." << std::endl;
+    std::cout << "1. Guitarra,\t\t\tfuente de sonido girando alrededor del oyente." << std::endl;
+    std::cout << "2. Coche,\t\t\tfuente de sonido de izquierda a derecha." << std::endl;
+    std::cout << "Selecciona demo[0-2]:" << std::endl;
+
+    int response;
+    std::cin >> response;
+
+    return response;
+}
+
 int main() {
+
+    int mode = launchInterface();
 
     HRESULT hr;
 
@@ -102,7 +120,7 @@ int main() {
         return false;
     }
 
-    std::cout << "Loading filters..." << std::endl;
+    std::cout << "Cargando filtros..." << std::endl;
 
     // Load filters for xAPO class
     filter_data* filters = (filter_data*)malloc(355 * sizeof(filter_data));
@@ -119,9 +137,25 @@ int main() {
     WAVEFORMATEXTENSIBLE wfx = { 0 };
     XAUDIO2_BUFFER buffer = { 0 };
 
+    std::string strFileName;
+
+    switch (mode) {
+    case 1: {
+        strFileName = "audio\\dandelion.wav";
+        break;
+    }
+    case 2: {
+        strFileName = "audio\\motor.wav";
+        break;
+    }
+    case 0: 
+    default: 
+        strFileName = "audio\\440.wav";
+    }
+
     //const std::string strFileName = "audio\\dandelion.wav";
     //const std::string strFileName = "audio\\440.wav";
-    const std::string strFileName = "audio\\motor.wav";
+    //const std::string strFileName = "audio\\motor.wav";
 
     hr = a3d::utils::openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
     if (FAILED(hr)) {
@@ -131,8 +165,6 @@ int main() {
     }
     IXAPOParameters* pXAPO = a3d::getXAPO(filters, *filters_size);
     XAUDIO2_EFFECT_DESCRIPTOR descriptor = a3d::getEffectDescriptor(pXAPO);
-
-    std::cout << "Finished!" << std::endl;
 
     // Structure indicating how many effects we have (1)
     XAUDIO2_EFFECT_CHAIN chain;
@@ -181,9 +213,13 @@ int main() {
         assert(0);
         return false;
     }
-
-    //loop2(pXAPO, 100);
-    loop(pXAPO);
+    
+    if (mode == 2) {
+        loop(pXAPO);
+    }
+    else {
+        loop2(pXAPO, 100);
+    }
 
     // Pausing so we can hear the sound
     system("pause");

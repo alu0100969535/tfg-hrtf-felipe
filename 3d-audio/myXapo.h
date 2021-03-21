@@ -326,7 +326,6 @@ public:
                     float gain = (double)pow(10, (double)decibel / 20.0);
 
                     if (decibel < 0) {
-                        std::cout << "Attenuating " << decibel << " " << gain << std::endl;
                         for (unsigned i = 0; i < processed_samples.left.size - overlap; i++) {
                             (*processed_samples.left.pdata)[i] *= gain;
                             (*processed_samples.right.pdata)[i] *= gain;
