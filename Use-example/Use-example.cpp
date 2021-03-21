@@ -16,20 +16,32 @@
 #include <thread>   //Timer
 
 void loop(IXAPOParameters* pXAPO) {
-    spherical_coordinates sound = { 1.4, 0, 1.75 };     // Sound source
+
+    cartesian_coordinates3d sound = {10, -50, 1.75};
+    cartesian_coordinates3d player = { 0, 0, 1.75 };    //Player ears
 
     while (true) {
 
-        sound.azimuth = sound.azimuth + 5;
+        sound.y = sound.y + 1;
 
-        if (abs(sound.azimuth) == 180) {
-            sound.azimuth = -sound.azimuth;
+        if (sound.y == 50) {
+            sound.y = -50;
         }
-        std::cout << "changing to azimuth: " << sound.azimuth << " elevation: " << sound.elevation << " radius: " << sound.radius << std::endl;
 
-        a3d::setPosition(pXAPO, sound);
+        cartesian_coordinates3d travel;
+        travel.x = sound.x - player.x;
+        travel.y = sound.y - player.y;
+        travel.z = sound.z - player.z;
 
-        system("pause");
+        std::cout << "changing to x: " << travel.x << " y: " << travel.y << " z: " << travel.z << std::endl;
+
+        spherical_coordinates final = cartesian3d2spherical(travel);
+
+        final.azimuth = rad2degree(final.azimuth);
+        final.elevation = rad2degree(final.elevation - degree2rad(90));
+
+        a3d::setPosition(pXAPO, final);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
@@ -83,7 +95,7 @@ int main() {
 
     // Create a mastering voice
     IXAudio2MasteringVoice* pMasterVoice = NULL;
-    hr = pXAudio2->CreateMasteringVoice(&pMasterVoice, 2);
+    hr = pXAudio2->CreateMasteringVoice(&pMasterVoice, 2, 44100);
     if (FAILED(hr)) {
         std::cout << "CreateMasteringVoice() failed" << std::endl;
         assert(0);
@@ -108,7 +120,8 @@ int main() {
     XAUDIO2_BUFFER buffer = { 0 };
 
     //const std::string strFileName = "audio\\dandelion.wav";
-    const std::string strFileName = "audio\\440.wav";
+    //const std::string strFileName = "audio\\440.wav";
+    const std::string strFileName = "audio\\motor.wav";
 
     hr = a3d::utils::openWav(strFileName.c_str(), wfx, buffer); // Output in wfx and buffer
     if (FAILED(hr)) {
@@ -169,7 +182,8 @@ int main() {
         return false;
     }
 
-    loop2(pXAPO, 100);
+    //loop2(pXAPO, 100);
+    loop(pXAPO);
 
     // Pausing so we can hear the sound
     system("pause");

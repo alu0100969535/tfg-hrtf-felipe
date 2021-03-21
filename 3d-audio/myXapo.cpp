@@ -9,6 +9,7 @@ myXapo::myXapo(XAPO_REGISTRATION_PROPERTIES* prop, BYTE* params, UINT32 params_s
 
     index_hrtf = 0;
     flip_filters = false;
+    applyDistance = false;
 
     new_samples.pdata = new CArray(512);
     new_samples.size = 0;
@@ -100,12 +101,6 @@ void myXapo::changeFilter(spherical_coordinates input) {
 
     spherical_coordinates coords = input;
 
-    if (this->last_coords.azimuth == input.azimuth &&
-        this->last_coords.elevation == input.elevation &&
-        this->last_coords.radius == input.radius) {
-        return; //Do nothing, we'll select the same filter.
-    }
-
     this->flip_filters = false;
     if (coords.azimuth < 0) {
         flip_filters = true;
@@ -154,7 +149,7 @@ unsigned myXapo::getSampleGap(spherical_coordinates input) {
     return (unsigned) round(gapPerMeter * input.radius);
 }
 
-double myXapo::getGain(spherical_coordinates input) {
+double myXapo::getDecibelChange(spherical_coordinates input) {
     // Using 1.4m as reference
     double distance = 1.4;
     
@@ -162,5 +157,5 @@ double myXapo::getGain(spherical_coordinates input) {
         return 0;
     }
 
-    return (input.radius / distance) * -6; // 6dB for every doubling in distance
+    return (input.radius / distance) * -0.25f; // 6dB for every doubling in distance
 }

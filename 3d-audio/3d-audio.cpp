@@ -112,6 +112,7 @@ namespace a3d {
             buffer.Flags = XAUDIO2_END_OF_STREAM; // tell the source voice not to expect any data after this buffer
             buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
             buffer.LoopBegin = UINT32(0);
+            return S_OK;
         }
 
         HRESULT loadFilters(filter_data* filters, size_t* size) {
@@ -174,7 +175,7 @@ namespace a3d {
 
             }
             *size = index - 1;
-            return 0;
+            return S_OK;
         }
 
     }

@@ -142,11 +142,14 @@ private:
 
     unsigned index_hrtf;
     bool flip_filters;
-    spherical_coordinates last_coords;
+    spherical_coordinates* last_coords;
+
+    bool applyDistance;
+
 
     void changeFilter(spherical_coordinates input);
     unsigned getSampleGap(spherical_coordinates input);
-    double getGain(spherical_coordinates input);
+    double getDecibelChange(spherical_coordinates input);
     
 
 public:
@@ -265,8 +268,17 @@ public:
                 (*process_samples.pdata)[0] = Complex(0, 0);
 
                 spherical_coordinates* coords = (spherical_coordinates*)(params);
+
+                if (this->last_coords == coords) {
+                    return; //Do nothing, we'll select the same filter.
+                }
+                else {
+                    changeFilter(*coords);
+                    applyDistance = true;
+                    
+                }
+                //last_coords = coords;
                 
-                changeFilter(*coords);
 
                 // In case we need to apply a filter in 2nd or 3rd quadrant, we flip the filters
                 if (this->flip_filters) {
@@ -306,6 +318,21 @@ public:
                         (*processed_samples.right.pdata)[i - overlap] = (*processed_samples.right.pdata)[i];
                     }
                     processed_samples.left.size = processed_samples.right.size = processed_samples.left.size - overlap;
+                }
+
+                // Apply distance attenuation
+                if (applyDistance) {
+                    double decibel = getDecibelChange(*coords);
+                    float gain = (double)pow(10, (double)decibel / 20.0);
+
+                    if (decibel < 0) {
+                        std::cout << "Attenuating " << decibel << " " << gain << std::endl;
+                        for (unsigned i = 0; i < processed_samples.left.size - overlap; i++) {
+                            (*processed_samples.left.pdata)[i] *= gain;
+                            (*processed_samples.right.pdata)[i] *= gain;
+                        }
+                    }
+                    applyDistance = false;
                 }
 
                 //processed samples, go to a queue, each channel separately
