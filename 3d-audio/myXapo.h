@@ -39,34 +39,6 @@
 #define fourccDPDS 'sdpd'
 #endif
 
-// Debug function, writes to file so we can plot some samples
-// TODO: Remove this when done
-inline void outputToFile(data_buffer& arr, const std::string name, const int tries, const bool real = false) {
-    std::ofstream myfile;
-    std::string dom = real ? "time" : "freq";
-    const std::string file = "C:\\Users\\faaa9\\AppData\\Roaming\\WickedEngineDev\\"+ name + "_" + std::to_string(tries) + "_" + dom + ".txt";
-    myfile.open(file);
-
-    if (!myfile.is_open()) {
-        assert(0);
-    }
-
-    int limit = real ? arr.size : arr.size / 2;
-
-    for (int i = 0; i < limit; i += 1) {
-        double magnitude = sqrt((*arr.pdata)[i].real() * (*arr.pdata)[i].real() + (*arr.pdata)[i].imag() * (*arr.pdata)[i].imag());
-
-        // Only real part needed when plotting time-domain 
-        if (real) {
-            myfile << ((*arr.pdata)[i].real()) << "," << i << std::endl;
-        } else {
-            myfile << magnitude << "," << i * (44100 / arr.size) << std::endl;
-        }
-    }
-
-    myfile.close();
-}
-
 // Cooley-Tukey FFT (in-place, divide-and-conquer)
 // Higher memory requirements and redundancy although more intuitive
 inline void fft(CArray& x) {
@@ -171,12 +143,6 @@ private:
     unsigned index_hrtf;
     bool flip_filters;
 
-    // DEBUG
-    bool done = false;
-    int index = 0;
-    int tries = 0;
-    int time = 0;
-
     void changeFilter(spherical_coordinates input);
     unsigned getSampleGap(spherical_coordinates input);
     double getGain(spherical_coordinates input);
@@ -277,12 +243,6 @@ public:
                 }
                 process_samples.size = fft_n;
 
-                //signal_i += step_size;
-
-                //outputToFile(new_samples, "new_samples", tries, true);
-                //outputToFile(ready_samples.right, "ready_samples.right", tries, true);
-                //tries++;
-
                 // Save samples we're not using this cycle
                 size_t extra_samples = new_len - step_size;
                 size_t index = new_samples.size - extra_samples;
@@ -307,8 +267,6 @@ public:
                 
                 changeFilter(*coords);
 
-                std::cout << "angle: " << hrtf_database[this->index_hrtf].angle << " elev: " << hrtf_database[this->index_hrtf].elevation << std::endl;
-
                 // In case we need to apply a filter in 2nd or 3rd quadrant, we flip the filters
                 if (this->flip_filters) {
                     // Apply convolution, for each channel
@@ -331,7 +289,6 @@ public:
                 ifft(processed_samples.right);
 
                 size_t overlap = (fir_size - 1);
-                //size_t overlap = fft_n / 2;
 
                 // Sum last computed frames to first freshly computed ones, on each channel
                 if (to_sum_samples.left.size > 0) {  
@@ -368,9 +325,6 @@ public:
 
                 //// End overlap-add ////
             }
-           /* outputToFile(ready_samples.left, "ready_samples.left", tries, true);
-            outputToFile(ready_samples.right, "ready_samples.right", tries, true);
-            tries++;*/
 
             // If we have processed samples, return them to xaudio2
             if (ready_samples.left.size > 0) {
@@ -402,25 +356,8 @@ public:
                 pOutputProcessParameters[0].ValidFrameCount = 0;
             }
 
-            
-
-            //// DEBUG ////
-            /*
-            if (!done) {
-                tries++;
-                if (tries > 10) {
-                    done = true;
-                }
-
-                //outputToFile(processed_samples.left,"processed_samples.left" , tries, true);
-                //outputToFile(processed_samples.right,"processed_samples.right" , tries, true);
-
-                outputToFile(ready_samples.left,"ready_samples.left" ,tries, true);
-                outputToFile(ready_samples.right, "ready_samples.right", tries, true);
-            }
-            */
             new_samples.size = 0;
-            //processed_samples.left.size = processed_samples.right.size = 0;
+            processed_samples.left.size = processed_samples.right.size = 0;
 
             break;
         }
