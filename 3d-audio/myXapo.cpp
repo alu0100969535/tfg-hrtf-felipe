@@ -100,6 +100,12 @@ void myXapo::changeFilter(spherical_coordinates input) {
 
     spherical_coordinates coords = input;
 
+    if (this->last_coords.azimuth == input.azimuth &&
+        this->last_coords.elevation == input.elevation &&
+        this->last_coords.radius == input.radius) {
+        return; //Do nothing, we'll select the same filter.
+    }
+
     this->flip_filters = false;
     if (coords.azimuth < 0) {
         flip_filters = true;

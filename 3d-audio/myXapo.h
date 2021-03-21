@@ -142,6 +142,7 @@ private:
 
     unsigned index_hrtf;
     bool flip_filters;
+    spherical_coordinates last_coords;
 
     void changeFilter(spherical_coordinates input);
     unsigned getSampleGap(spherical_coordinates input);
